@@ -1,6 +1,15 @@
-export const APP_VERSION = "1.9.6";
+export const APP_VERSION = "1.10.0";
 
 export const CHANGELOG = [
+  {
+    version: "1.10.0",
+    date: "2026-07-30",
+    changes: [
+      "全面優化首頁、卡片、表單、按鈕及底部導覽的視覺層級與質感。",
+      "導覽層採用輕量玻璃效果，案件內容維持高對比實底。",
+      "強化表單焦點、主要操作辨識度、觸控回饋及高對比模式。"
+    ]
+  },
   {
     version: "1.9.6",
     date: "2026-07-30",
