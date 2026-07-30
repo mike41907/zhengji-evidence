@@ -83,6 +83,36 @@ export function calculateNet(gross, packageWeight) {
   return (grossNumber - packageNumber).toFixed(2);
 }
 
+export function cloneEvidenceSettings(source, { id, caseId, sequence, number, timestamp }) {
+  return {
+    ...source,
+    id,
+    caseId,
+    sequence,
+    number,
+    quantity: "",
+    grossWeight: "",
+    packageWeight: "",
+    netWeight: "",
+    foundAt: "",
+    foundOriginalAt: "",
+    foundTimeSource: "",
+    testAt: "",
+    testOriginalAt: "",
+    testTimeSource: "",
+    testResult: "",
+    reaction: "",
+    imei: "",
+    phoneNumber: "",
+    billCount: "",
+    cashTotal: "",
+    notes: "",
+    status: "採證中",
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+}
+
 export function toast(message, type = "成功") {
   const old = document.querySelector(".toast");
   old?.remove();
