@@ -968,6 +968,8 @@ async function renderDataManager() {
     <label class="file-card"><strong>匯入單一案件備份</strong><small>重複案件識別碼將停止匯入</small><input id="restore-case" type="file" accept=".json,application/json"></label>
     <button id="export-options"><strong>匯出預設選項</strong><small>另存常用選項、人員及地址</small></button></section>
     <section class="panel"><h2>安全提醒</h2><p>備份檔可能包含個人資料、照片與簽名。請存放於受控裝置，不要傳送到未經授權的雲端服務。</p></section>
+    <section class="panel app-maintenance"><div><h2>系統維護</h2><p>重新整理不會刪除資料；清除暫存只會移除證跡的離線網頁快取，不會清除案件、照片、文件、簽名或常用設定。</p></div>
+      <div class="maintenance-actions"><button id="reload-app">重新整理系統</button><button id="clear-app-cache">清除暫存並重新整理</button></div></section>
     <section class="panel clear-cases-panel"><div><h2>清除全部案件</h2><p>目前共有 <strong>${caseCount}</strong> 件。只會清除案件、證物、照片、文件、簽名與稽核紀錄；常用選項、人員及地址設定會保留。</p></div>
       <button class="danger-button" id="clear-all-cases" ${caseCount ? "" : "disabled"}>一鍵清除案件</button></section>
     <section class="panel version-history"><div class="section-title"><h2>更新紀錄</h2><span class="badge active">v${APP_VERSION}</span></div>
@@ -979,6 +981,26 @@ async function renderDataManager() {
   document.querySelector("#export-options").onclick = async () => {
     const data = { version: 1, options: await getAll("options"), addresses: await getAll("addresses"), people: await getAll("people") };
     downloadBlob(new Blob([JSON.stringify(data)], { type: "application/json" }), "證跡_常用資料.json");
+  };
+  document.querySelector("#reload-app").onclick = () => location.reload();
+  document.querySelector("#clear-app-cache").onclick = async event => {
+    if (!confirm("確定清除證跡的離線暫存並重新整理？案件及所有正式資料都會保留。")) return;
+    const button = event.currentTarget;
+    setButtonBusy(button, "清除中…");
+    try {
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(key => caches.delete(key)));
+      }
+      if ("serviceWorker" in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map(registration => registration.unregister()));
+      }
+      location.replace(`${location.pathname}?refresh=${Date.now()}`);
+    } catch (error) {
+      restoreButton(button);
+      toast(`無法清除暫存：${error.message}`, "錯誤");
+    }
   };
   document.querySelector("#clear-all-cases").onclick = async () => {
     if (!confirm(`即將永久清除本裝置內 ${caseCount} 件案件及其證物、照片、文件與簽名。建議先匯出完整備份。是否繼續？`)) return;
