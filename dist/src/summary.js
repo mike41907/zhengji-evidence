@@ -10,11 +10,12 @@ export const SUMMARY_FIELDS = [
 export function evidenceSummary(evidenceList) {
   if (!evidenceList.length) return "尚無證物資料";
   return evidenceList.map(item => {
-    const name = item.drugType || item.name || "未填證物";
+    const isDrug = (item.evidenceCategory || "毒品") === "毒品";
+    const name = isDrug ? (item.drugType || item.name || "未填證物") : (item.name || item.evidenceCategory || "未填證物");
     const weight = item.netWeight || item.grossWeight;
-    const weightText = weight ? `${weight}${item.weightUnit || "公克"}` : "重量未填";
+    const weightText = weight ? `、${weight}${item.weightUnit || "公克"}` : isDrug ? "、重量未填" : "";
     const quantityText = item.quantity ? `${item.quantity}${item.quantityUnit || ""}` : "";
-    return `${item.number || "未編號"}${name}${quantityText ? `共${quantityText}` : ""}、${weightText}`;
+    return `${item.number || "未編號"}${name}${quantityText ? `共${quantityText}` : ""}${weightText}`;
   }).join("；");
 }
 

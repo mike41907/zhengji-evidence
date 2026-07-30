@@ -11,6 +11,7 @@ const state = { page: "首頁", caseId: "", evidenceId: "", step: 1, documentTyp
 const documentTypes = ["搜索扣押筆錄", "毒品初步檢驗紀錄表", "證物照片紀錄", "扣押物品清冊"];
 const statuses = ["草稿", "採證中", "已完成", "待簽署", "已簽署", "已作廢"];
 const CASE_DRAFT_KEY = "證跡_新增案件草稿";
+const evidenceCategories = ["毒品", "毒品施用器具", "電子磅秤", "手機", "現金", "包裝材料", "其他"];
 
 function shell(content, title = "證跡") {
   app.innerHTML = `<header class="topbar"><button class="brand" data-go="首頁"><span>證跡</span><small>證物採證與文件產製系統</small></button>
@@ -389,7 +390,7 @@ async function evidenceCards(items) {
     const photos = (await byCase("photos", item.caseId)).filter(photo => photo.evidenceId === item.id);
     const checks = validateEvidence(item, photos);
     return `<button class="evidence-card" data-go="證物採證" data-id="${item.id}"><div><span class="evidence-number">${escapeHtml(item.number)}</span>
-      <h3>${escapeHtml(item.name || "尚未填寫證物名稱")}</h3><p>${escapeHtml(item.drugType || "種類未選")}｜${escapeHtml(item.quantity || "0")}${escapeHtml(item.quantityUnit || "")}</p></div>
+      <h3>${escapeHtml(item.name || "尚未填寫證物名稱")}</h3><p>${escapeHtml(item.evidenceCategory || "毒品")}｜${escapeHtml(item.drugType || item.appearance || "內容未填")}｜${escapeHtml(item.quantity || "0")}${escapeHtml(item.quantityUnit || "")}</p></div>
       <div>${checks.length ? `<span class="badge danger">缺漏 ${checks.length} 項</span><small>${escapeHtml(checks.slice(0, 2).join("、"))}</small>` : '<span class="badge done">採證完成</span>'}</div></button>`;
   }))).join("");
 }
@@ -399,7 +400,7 @@ async function createEvidence(caseData, current) {
   const sequence = current.length + 1;
   const prefix = localStorage.getItem("證物編號格式") || "證";
   const item = {
-    id: uuid(), caseId: caseData.id, sequence, number: `${prefix}${chineseNumber(sequence)}`, name: "疑似毒品",
+    id: uuid(), caseId: caseData.id, sequence, number: `${prefix}${chineseNumber(sequence)}`, evidenceCategory: "毒品", name: "疑似毒品",
     drugType: "", appearance: "", color: "", packaging: "", quantity: "", quantityUnit: "包",
     grossWeight: "", packageWeight: "", netWeight: "", weightUnit: "公克", foundAddress: caseData.address,
     space: "", exactLocation: "", positionExtra: "", locationText: "", foundAt: "", foundOriginalAt: "", foundTimeSource: "",
@@ -417,7 +418,8 @@ async function renderEvidenceWizard() {
   state.caseId = evidence.caseId;
   const caseData = await get("cases", evidence.caseId);
   const photos = (await byCase("photos", evidence.caseId)).filter(item => item.evidenceId === evidence.id);
-  const stepNames = ["發現位置", "證物資料", "秤重", "毒品初驗", "完整檢查"];
+  const isDrug = (evidence.evidenceCategory || "毒品") === "毒品";
+  const stepNames = ["發現位置", "證物資料", isDrug ? "秤重" : "重量選填", isDrug ? "毒品初驗" : "初驗選填", "完整檢查"];
   shell(`<section class="wizard-head"><div><span class="evidence-number">${escapeHtml(evidence.number)}</span><h2>${escapeHtml(evidence.name)}</h2></div>
     <div class="stepper">${stepNames.map((name, index) => `<button class="${state.step === index + 1 ? "current" : state.step > index + 1 ? "complete" : ""}" data-step="${index + 1}"><span>${index + 1}</span><small>${name}</small></button>`).join("")}</div></section>
     <section id="wizard-content" class="panel">${await wizardStep(state.step, evidence, photos, caseData)}</section>
@@ -430,16 +432,17 @@ async function wizardStep(step, evidence, photos, caseData) {
   if (step === 1) return photoStep("發現位置照片", photos, evidence, "foundAt", "查獲時間") + `
     <h3>發現位置快速組合</h3><div class="form-grid">${await optionSelect("空間位置", "space", evidence.space)}${await optionSelect("具體位置", "exactLocation", evidence.exactLocation)}
     ${await optionSelect("位置補充", "positionExtra", evidence.positionExtra)}<label class="wide">完整位置說明<textarea name="locationText">${escapeHtml(evidence.locationText)}</textarea></label></div>`;
-  if (step === 2) return `<div class="form-grid">${field("證物編號", "number", evidence.number, true)}${field("證物名稱", "name", evidence.name, true)}
-    ${await optionSelect("疑似毒品種類", "drugType", evidence.drugType)}${await optionSelect("證物外觀", "appearance", evidence.appearance)}
+  if (step === 2) return `<div class="form-grid">${field("證物編號", "number", evidence.number, true)}
+    ${selectField("證物類別", "evidenceCategory", evidenceCategories, evidence.evidenceCategory || "毒品")}${field("證物名稱", "name", evidence.name, true)}
+    ${isDrug ? await optionSelect("疑似毒品種類", "drugType", evidence.drugType) : ""}${await optionSelect("證物外觀", "appearance", evidence.appearance)}
     ${await optionSelect("顏色", "color", evidence.color)}${await optionSelect("包裝方式", "packaging", evidence.packaging)}
     <label>數量<div class="quick-values">${[1,2,3,4,5,10].map(value => `<button type="button" data-quantity="${value}">${value}</button>`).join("")}</div><input type="number" inputmode="numeric" min="1" name="quantity" value="${escapeHtml(evidence.quantity)}"></label>
     ${await optionSelect("數量單位", "quantityUnit", evidence.quantityUnit)}</div>`;
-  if (step === 3) return `<div class="form-grid"><label>毛重<em>必填</em><input type="number" inputmode="decimal" min="0" step="0.01" name="grossWeight" value="${escapeHtml(evidence.grossWeight)}"></label>
+  if (step === 3) return `${isDrug ? "" : '<div class="notice"><strong>非毒品證物</strong><p>重量與秤重照片為選填，可直接前往下一步。</p></div>'}<div class="form-grid"><label>毛重${isDrug ? "<em>必填</em>" : ""}<input type="number" inputmode="decimal" min="0" step="0.01" name="grossWeight" value="${escapeHtml(evidence.grossWeight)}"></label>
     <label>包裝重量<input type="number" inputmode="decimal" min="0" step="0.01" name="packageWeight" value="${escapeHtml(evidence.packageWeight)}"></label>
     <label>淨重<input name="netWeight" value="${escapeHtml(evidence.netWeight)}" readonly></label>${await optionSelect("重量單位", "weightUnit", evidence.weightUnit)}</div>
     ${photoStep("秤重照片", photos)}`;
-  if (step === 4) return `<div class="form-grid">${await optionSelect("初驗試劑", "reagent", evidence.reagent)}${await optionSelect("初驗結果", "testResult", evidence.testResult)}
+  if (step === 4) return `${isDrug ? "" : '<div class="notice"><strong>非毒品證物</strong><p>毒品初驗資料為選填，可直接進行完整檢查。</p></div>'}<div class="form-grid">${await optionSelect("初驗試劑", "reagent", evidence.reagent)}${await optionSelect("初驗結果", "testResult", evidence.testResult)}
     <label class="wide">反應情形<textarea name="reaction">${escapeHtml(evidence.reaction)}</textarea></label></div>${photoStep("初驗照片", photos, evidence, "testAt", "初驗時間")}`;
   const issues = validateEvidence(evidence, photos);
   return `<section class="completion ${issues.length ? "has-errors" : ""}"><div class="completion-mark">${issues.length ? "！" : "✓"}</div>
@@ -482,6 +485,13 @@ function bindWizard(evidence, photos, caseData) {
   document.querySelectorAll("[data-quantity]").forEach(button => button.onclick = () => {
     document.querySelector("[name='quantity']").value = button.dataset.quantity;
     document.querySelector("[name='quantity']").dispatchEvent(new Event("change"));
+  });
+  document.querySelector("[name='evidenceCategory']")?.addEventListener("change", event => {
+    const name = document.querySelector("[name='name']");
+    const previousCategory = evidence.evidenceCategory || "毒品";
+    if (!name.value || name.value === "疑似毒品" || name.value === previousCategory) {
+      name.value = event.target.value === "毒品" ? "疑似毒品" : event.target.value;
+    }
   });
   document.querySelectorAll("[name='grossWeight'],[name='packageWeight']").forEach(input => input?.addEventListener("input", () => {
     try { document.querySelector("[name='netWeight']").value = calculateNet(document.querySelector("[name='grossWeight']").value, document.querySelector("[name='packageWeight']").value); }
@@ -595,16 +605,17 @@ async function updateTime(evidence, key, value, source) {
 export function validateEvidence(item, photos) {
   const issues = [];
   const has = type => photos.some(photo => photo.type === type);
+  const isDrug = (item.evidenceCategory || "毒品") === "毒品";
   if (!item.number) issues.push("第二步：證物編號未填");
   if (!item.name) issues.push("第二步：證物名稱未填");
   if (!has("發現位置照片")) issues.push("第一步：缺少發現位置照片");
   if (!item.foundAt) issues.push("第一步：缺少查獲時間");
   if (!item.locationText) issues.push("第一步：缺少查獲位置");
   if (!item.quantity) issues.push("第二步：缺少數量");
-  if (!item.grossWeight) issues.push("第三步：缺少毛重");
-  if (!has("秤重照片")) issues.push("第三步：缺少秤重照片");
-  if (item.testResult && item.testResult !== "未實施初驗" && !item.reagent) issues.push("第四步：有初驗結果但未選初驗試劑");
-  if (item.testResult && item.testResult !== "未實施初驗" && !has("初驗照片")) issues.push("第四步：有初驗結果但缺少初驗照片");
+  if (isDrug && !item.grossWeight) issues.push("第三步：缺少毛重");
+  if (isDrug && !has("秤重照片")) issues.push("第三步：缺少秤重照片");
+  if (isDrug && item.testResult && item.testResult !== "未實施初驗" && !item.reagent) issues.push("第四步：有初驗結果但未選初驗試劑");
+  if (isDrug && item.testResult && item.testResult !== "未實施初驗" && !has("初驗照片")) issues.push("第四步：有初驗結果但缺少初驗照片");
   if (has("初驗照片") && !item.testAt) issues.push("第四步：有初驗照片但缺少初驗時間");
   return issues;
 }

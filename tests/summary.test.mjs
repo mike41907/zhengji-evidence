@@ -26,4 +26,12 @@ test("摘要固定欄位會代入案件與證物資料", () => {
 });
 
 test("毒品明細優先使用淨重", () => assert.match(evidenceSummary(evidence), /9.25公克/));
+test("非毒品證物不會顯示重量未填", () => {
+  const summary = evidenceSummary([{
+    number: "證二", evidenceCategory: "手機", name: "iPhone 手機",
+    quantity: "1", quantityUnit: "支", grossWeight: "", netWeight: ""
+  }]);
+  assert.match(summary, /證二iPhone 手機共1支/);
+  assert.doesNotMatch(summary, /重量未填/);
+});
 test("未知摘要欄位會被攔截", () => assert.deepEqual(unknownSummaryFields("{{執行單位}}{{不存在欄位}}"), ["不存在欄位"]));

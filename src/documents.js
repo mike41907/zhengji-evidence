@@ -32,7 +32,8 @@ export function generateDocument(type, caseData, evidenceList, photos, options =
       ["執行人員", caseData.executors], ["在場人員", caseData.presentPeople]
     ]) + `<h2>扣押物品及查獲情形</h2>${evidenceTable(evidenceList)}${signatureArea(options)}`;
   } else if (type === "毒品初步檢驗紀錄表") {
-    body = evidenceList.map(item => heading(type, caseData, draft) + table([
+    const drugEvidence = evidenceList.filter(item => (item.evidenceCategory || "毒品") === "毒品");
+    body = drugEvidence.map(item => heading(type, caseData, draft) + table([
       ["犯罪嫌疑人", caseData.suspect],
       ["查獲日期時間", rocDateTime(item.foundAt)], ["查獲地點", `${caseData.address || ""}${item.locationText || ""}`],
       ["證物編號", item.number], ["證物名稱", item.name], ["外觀", item.appearance], ["顏色", item.color],
@@ -41,7 +42,7 @@ export function generateDocument(type, caseData, evidenceList, photos, options =
       ["淨重", `${item.netWeight || ""}${item.weightUnit || ""}`], ["初驗試劑", item.reagent],
       ["初驗結果", item.testResult], ["反應情形", item.reaction],
       ["初驗時間", rocDateTime(item.testAt)], ["初驗人員", caseData.tester]
-    ]) + signatureArea(options)).join('<div class="page-break"></div>');
+    ]) + signatureArea(options)).join('<div class="page-break"></div>') || heading(type, caseData, draft) + "<p>本案件尚無毒品類證物。</p>";
   } else if (type === "證物照片紀錄") {
     let sequence = 0;
     const cards = photos.sort((a, b) => (a.order || 0) - (b.order || 0)).map(photo => {
@@ -60,7 +61,7 @@ export function generateDocument(type, caseData, evidenceList, photos, options =
 
 function evidenceTable(items) {
   return `<table><thead><tr><th>項次</th><th>證物編號</th><th>品名</th><th>外觀</th><th>顏色</th><th>包裝</th><th>數量</th><th>毛重</th><th>淨重</th><th>初驗結果</th></tr></thead><tbody>
-    ${items.map((item, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(item.number)}</td><td>${escapeHtml(item.name)}</td>
+    ${items.map((item, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(item.number)}</td><td>${escapeHtml(item.name || item.evidenceCategory)}</td>
     <td>${escapeHtml(item.appearance)}</td><td>${escapeHtml(item.color)}</td><td>${escapeHtml(item.packaging)}</td>
     <td>${escapeHtml(`${item.quantity || ""}${item.quantityUnit || ""}`)}</td><td>${escapeHtml(`${item.grossWeight || ""}${item.weightUnit || ""}`)}</td>
     <td>${escapeHtml(`${item.netWeight || ""}${item.weightUnit || ""}`)}</td><td>${escapeHtml(item.testResult)}</td></tr>`).join("")}</tbody></table>`;
