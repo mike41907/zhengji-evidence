@@ -52,5 +52,6 @@ export async function collectCase(caseId) {
     byCase("evidence", caseId), byCase("photos", caseId), byCase("documents", caseId),
     byCase("signatures", caseId), byCase("audit", caseId)
   ]);
+  photos.sort((a, b) => (a.order || 0) - (b.order || 0) || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
   return { evidence, photos, documents, signatures, audit };
 }

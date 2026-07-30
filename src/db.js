@@ -1,9 +1,9 @@
 import { nowIso, uuid } from "./utils.js";
 
 const DATABASE_NAME = "證跡第一版資料庫";
-const DATABASE_VERSION = 1;
-const STORES = ["cases", "evidence", "photos", "options", "addresses", "people", "documents", "signatures", "audit"];
-export const CASE_DATA_STORES = ["cases", "evidence", "photos", "documents", "signatures", "audit"];
+const DATABASE_VERSION = 2;
+const STORES = ["cases", "evidence", "photos", "options", "addresses", "people", "documents", "signatures", "audit", "trash"];
+export const CASE_DATA_STORES = ["cases", "evidence", "photos", "documents", "signatures", "audit", "trash"];
 let connection;
 
 export function openDatabase() {
@@ -83,11 +83,20 @@ export async function deleteEvidenceData(evidenceId, caseId) {
 
 export async function deleteCaseData(caseId) {
   const db = await openDatabase();
+  const caseData = await get("cases", caseId);
+  if (!caseData) return;
   const relatedStores = ["evidence", "photos", "documents", "signatures"];
   const relatedItems = Object.fromEntries(await Promise.all(
     relatedStores.map(async storeName => [storeName, await byCase(storeName, caseId)])
   ));
-  const transaction = db.transaction(["cases", ...relatedStores], "readwrite");
+  const deletedAt = nowIso();
+  const trashItem = {
+    id: caseId, caseId, name: caseData.name || "未命名案件", deletedAt,
+    expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
+    data: { case: caseData, ...relatedItems }
+  };
+  const transaction = db.transaction(["cases", ...relatedStores, "trash"], "readwrite");
+  transaction.objectStore("trash").put(trashItem);
   transaction.objectStore("cases").delete(caseId);
   const deletedCounts = {};
   for (const storeName of relatedStores) {
@@ -103,8 +112,39 @@ export async function deleteCaseData(caseId) {
   });
   await put("audit", {
     id: uuid(), caseId, action: "刪除案件", entity: "cases", entityId: caseId,
-    deletedCounts, at: nowIso()
+    deletedCounts, at: deletedAt
   }, false);
+}
+
+export async function restoreCaseData(caseId) {
+  const item = await get("trash", caseId);
+  if (!item?.data?.case) throw new Error("找不到可復原的案件。");
+  const db = await openDatabase();
+  const relatedStores = ["evidence", "photos", "documents", "signatures"];
+  const transaction = db.transaction(["cases", ...relatedStores, "trash"], "readwrite");
+  transaction.objectStore("cases").put(item.data.case);
+  for (const storeName of relatedStores) {
+    for (const value of item.data[storeName] || []) transaction.objectStore(storeName).put(value);
+  }
+  transaction.objectStore("trash").delete(caseId);
+  await new Promise((resolve, reject) => {
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error || new Error("復原案件失敗。"));
+  });
+  await put("audit", { id: uuid(), caseId, action: "復原刪除案件", entity: "cases", entityId: caseId, at: nowIso() }, false);
+}
+
+export async function permanentlyDeleteTrash(caseId) {
+  const db = await openDatabase();
+  await requestPromise(db.transaction("trash", "readwrite").objectStore("trash").delete(caseId));
+}
+
+export async function purgeExpiredTrash(reference = Date.now()) {
+  const items = await getAll("trash");
+  const expired = items.filter(item => new Date(item.expiresAt).getTime() <= reference);
+  for (const item of expired) await permanentlyDeleteTrash(item.id);
+  return expired.length;
 }
 
 export async function byCase(storeName, caseId) {
