@@ -54,8 +54,9 @@ export function generateDocument(type, caseData, evidenceList, photos, options =
     }).join("");
     body = heading(type, caseData, draft) + `<div class="photo-grid">${cards || "<p>尚無照片。</p>"}</div>`;
   } else {
-    body = heading("扣押物品清冊", caseData, draft) + evidenceTable(evidenceList);
+    body = seizureInventory(caseData, evidenceList, draft);
   }
+  if (type === "扣押物品目錄表" || type === "扣押物品清冊") return body;
   return `<article class="document">${body}<footer>文件版本：${escapeHtml(options.version || "第一版")}</footer></article>`;
 }
 
@@ -65,6 +66,61 @@ function evidenceTable(items) {
     <td>${escapeHtml(item.appearance)}</td><td>${escapeHtml(item.color)}</td><td>${escapeHtml(item.packaging)}</td>
     <td>${escapeHtml(`${item.quantity || ""}${item.quantityUnit || ""}`)}</td><td>${escapeHtml(`${item.grossWeight || ""}${item.weightUnit || ""}`)}</td>
     <td>${escapeHtml(`${item.netWeight || ""}${item.weightUnit || ""}`)}</td><td>${escapeHtml(item.testResult)}</td></tr>`).join("")}</tbody></table>`;
+}
+
+function inventoryItemName(item) {
+  const category = item.evidenceCategory || "毒品";
+  const details = [];
+  if (category === "毒品") {
+    details.push(item.drugType || item.name || "疑似毒品");
+    if (item.appearance) details.push(item.appearance);
+    if (item.packaging) details.push(item.packaging);
+  } else if (category === "手機") {
+    details.push(item.name || "手機");
+    if (item.brand || item.model) details.push([item.brand, item.model].filter(Boolean).join(" "));
+    if (item.imei) details.push(`IMEI：${item.imei}`);
+  } else if (category === "電子磅秤") {
+    details.push(item.name || "電子磅秤");
+    if (item.brand || item.model) details.push([item.brand, item.model].filter(Boolean).join(" "));
+    if (item.scaleResidue) details.push(`秤面：${item.scaleResidue}`);
+  } else if (category === "毒品施用器具") {
+    details.push(item.utensilType || item.name || "毒品施用器具");
+    if (item.material) details.push(item.material);
+    if (item.residue) details.push(`殘留：${item.residue}`);
+  } else if (category === "現金") {
+    details.push(item.name || "現金");
+    if (item.denomination && item.billCount) details.push(`${item.denomination}元×${item.billCount}張`);
+    if (item.cashTotal) details.push(`合計${item.cashTotal}元`);
+  } else {
+    details.push(item.name || category);
+    if (item.material) details.push(item.material);
+    if (item.residue) details.push(`殘留：${item.residue}`);
+    if (item.categoryNote) details.push(item.categoryNote);
+  }
+  return details.filter(Boolean).join("\n");
+}
+
+function seizureInventory(caseData, items, draft) {
+  const minimumRows = 11;
+  const rows = Array.from({ length: Math.max(minimumRows, items.length) }, (_, index) => {
+    const item = items[index];
+    if (!item) return `<tr class="inventory-empty"><td>${index + 1}</td><td></td><td></td><td></td><td></td><td></td></tr>`;
+    const isCash = item.evidenceCategory === "現金";
+    const unit = isCash ? "張" : item.quantityUnit || "件";
+    const quantity = isCash ? item.billCount || "" : item.quantity || "";
+    return `<tr><td>${index + 1}</td><td class="inventory-name">${escapeHtml(inventoryItemName(item)).replaceAll("\n", "<br>")}</td>
+      <td>${escapeHtml(unit)}</td><td>${escapeHtml(quantity)}</td><td class="inventory-signature"></td>
+      <td>${escapeHtml(item.notes || "")}</td></tr>`;
+  }).join("");
+  return `<article class="document seizure-inventory">
+    <header><h1>${escapeHtml(caseData.agencyName || caseData.unit || "執行機關")}扣押物品目錄表</h1>${draft ? '<div class="watermark">未簽署工作稿</div>' : ""}</header>
+    <table class="inventory-table">
+      <colgroup><col style="width:8%"><col style="width:35%"><col style="width:10%"><col style="width:10%"><col style="width:27%"><col style="width:10%"></colgroup>
+      <thead><tr><th>編號</th><th>品名</th><th>單位</th><th>數量</th><th>所有人／持有<br>人／保管人</th><th>備考</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p class="inventory-footnote">（可視實際需要增列）</p>
+  </article>`;
 }
 
 function signatureArea(options) {
