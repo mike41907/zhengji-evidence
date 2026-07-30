@@ -1,5 +1,5 @@
 import { byCase, clearAllCaseData, get, getAll, importDatabase, openDatabase, put, remove, seedDefaults } from "./db.js";
-import { calculateNet, chineseNumber, downloadBlob, escapeHtml, inputToIso, localInputValue, nowIso, rocDateTime, sha256, toast, uuid } from "./utils.js";
+import { calculateNet, chineseNumber, cloneEvidenceSettings, downloadBlob, escapeHtml, inputToIso, localInputValue, nowIso, rocDateTime, sha256, toast, uuid } from "./utils.js";
 import { documentHash, generateDocument, photoCaption, wrapDocument } from "./documents.js";
 import { collectCase, exportAllBackup, exportCase } from "./exporter.js";
 import { DEFAULT_SUMMARY_TEMPLATE, renderSummary, SUMMARY_FIELDS, summaryValues, unknownSummaryFields } from "./summary.js";
@@ -220,14 +220,20 @@ function bindCaseDraft(existing) {
   let timer;
   const saveDraft = () => {
     clearTimeout(timer);
+    let status = document.querySelector(".draft-save-status");
+    if (!status) {
+      status = document.createElement("span");
+      status.className = "draft-save-status";
+      status.setAttribute("aria-live", "polite");
+      form.querySelector(".form-stepper").after(status);
+    }
+    status.classList.add("saving");
+    status.textContent = "正在儲存草稿…";
     timer = setTimeout(() => {
       const values = Object.fromEntries(new FormData(form));
       localStorage.setItem(CASE_DRAFT_KEY, JSON.stringify({ values, savedAt: nowIso() }));
-      document.querySelector(".draft-save-status")?.remove();
-      const status = document.createElement("span");
-      status.className = "draft-save-status";
-      status.textContent = "草稿已自動儲存";
-      form.querySelector(".form-stepper").after(status);
+      status.classList.remove("saving");
+      status.textContent = `已自動儲存｜${new Date().toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" })}`;
     }, 350);
   };
   form.addEventListener("input", saveDraft);
@@ -513,7 +519,10 @@ async function wizardStep(step, evidence, photos, caseData) {
   const issues = validateEvidence(evidence, photos);
   return `<section class="completion ${issues.length ? "has-errors" : ""}"><div class="completion-mark">${issues.length ? "！" : "✓"}</div>
     <h2>${issues.length ? "尚有資料需要補齊" : "採證完成"}</h2>${issues.length ? `<div class="issue-jump-list">${issues.map(issue => `<button type="button" data-issue-step="${issueStep(issue)}">${escapeHtml(issue)}<span>前往修正 →</span></button>`).join("")}</div>` : "<p>照片、時間、重量與初驗資料皆已完成。</p>"}
-    <div class="completion-actions"><button id="generate-captions">重新產生照片說明</button>${issues.length ? "" : '<button class="primary" id="add-next-evidence">完成並新增下一件</button>'}</div></section>`;
+    <div class="completion-actions"><button id="generate-captions">重新產生照片說明</button>${issues.length ? "" : `
+      <button id="add-next-evidence">新增其他類型</button>
+      <button id="add-same-evidence">新增同類證物</button>
+      <button class="primary" id="duplicate-evidence">複製本件設定新增</button>`}</div></section>`;
 }
 
 function issueStep(issue) {
@@ -678,6 +687,32 @@ function bindWizard(evidence, photos, caseData) {
     if (!saved) return;
     const current = await byCase("evidence", evidence.caseId);
     await createEvidence(caseData, current);
+  });
+  document.querySelector("#add-same-evidence")?.addEventListener("click", async () => {
+    const saved = await saveWizard(evidence);
+    if (!saved) return;
+    const current = await byCase("evidence", evidence.caseId);
+    await createEvidence(caseData, current, evidence.evidenceCategory || "毒品");
+  });
+  document.querySelector("#duplicate-evidence")?.addEventListener("click", async () => {
+    const saved = await saveWizard(evidence);
+    if (!saved) return;
+    const current = await byCase("evidence", evidence.caseId);
+    const source = await get("evidence", evidence.id);
+    const sequence = current.length + 1;
+    const timestamp = nowIso();
+    const copy = cloneEvidenceSettings(source, {
+      id: uuid(),
+      caseId: evidence.caseId,
+      sequence,
+      number: `${localStorage.getItem("證物編號格式") || "證"}${chineseNumber(sequence)}`,
+      timestamp
+    });
+    await put("evidence", copy);
+    state.evidenceId = copy.id;
+    state.step = 1;
+    toast("已複製證物設定；照片、時間、重量及個別識別資料未帶入。");
+    await renderEvidenceWizard();
   });
   document.querySelectorAll("input,select,textarea").forEach(element => {
     if (!element.matches("[type='file']")) element.addEventListener("change", () => saveWizard(evidence));
@@ -920,7 +955,13 @@ async function renderSignature() {
   const { evidence, photos, documents } = await collectCase(state.caseId);
   const issues = evidence.flatMap(item => validateEvidence(item, photos.filter(photo => photo.evidenceId === item.id)).map(issue => `${item.number}：${issue}`));
   const content = generateDocument(state.documentType, caseData, evidence, photos);
-  shell(`<section class="notice"><strong>簽署前請完整閱覽文件</strong><p>捲動至文件底部後，才能進行簽署。</p></section>
+  shell(`<ol class="signature-progress" aria-label="文件簽署進度">
+      <li class="current" data-sign-step="read"><span>1</span><strong>閱讀文件</strong></li>
+      <li data-sign-step="method"><span>2</span><strong>確認方式</strong></li>
+      <li data-sign-step="identity"><span>3</span><strong>身分簽名</strong></li>
+      <li data-sign-step="save"><span>4</span><strong>確認儲存</strong></li>
+    </ol>
+    <section class="notice"><strong>簽署前請完整閱覽文件</strong><p>捲動至文件底部後，才能進行簽署。</p></section>
     ${issues.length ? `<section class="panel danger"><h2>尚無法簽署</h2><ul>${issues.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section>` : ""}
     <section id="signature-preview" class="document-preview scroll-preview">${content}<div id="document-end">文件內容結束</div></section>
     <section class="panel signature-form">
@@ -931,11 +972,25 @@ async function renderSignature() {
       <div class="action-row"><button id="clear-signature">清除重簽</button><button class="primary" id="confirm-signature" ${issues.length ? "disabled" : ""}>確認簽署</button></div>
     </section>`, "文件簽署");
   const preview = document.querySelector("#signature-preview");
+  const signatureCanvas = document.querySelector("#signature-pad");
+  const updateSignatureProgress = () => {
+    const completed = [
+      state.previewRead,
+      Boolean(document.querySelector("[name='reading']:checked")),
+      Boolean(document.querySelector("[name='signerName']")?.value.trim() && document.querySelector("[name='signerRole']")?.value && signatureCanvas.dataset.signed)
+    ];
+    const activeIndex = completed.findIndex(value => !value);
+    document.querySelectorAll("[data-sign-step]").forEach((item, index) => {
+      item.classList.toggle("complete", index < 3 && completed[index]);
+      item.classList.toggle("current", index === (activeIndex < 0 ? 3 : activeIndex));
+    });
+  };
   state.previewRead = false;
   const markPreviewRead = () => {
     if (preview.scrollTop + preview.clientHeight >= preview.scrollHeight - 30) {
       state.previewRead = true;
       preview.classList.add("read-complete");
+      updateSignatureProgress();
     }
   };
   preview.addEventListener("scroll", markPreviewRead, { passive: true });
@@ -946,8 +1001,15 @@ async function renderSignature() {
     endObserver.observe(document.querySelector("#document-end"));
   }
   requestAnimationFrame(markPreviewRead);
-  setupSignaturePad(document.querySelector("#signature-pad"));
-  document.querySelector("#clear-signature").onclick = () => clearSignature(document.querySelector("#signature-pad"));
+  setupSignaturePad(signatureCanvas, updateSignatureProgress);
+  document.querySelectorAll("[name='reading'],[name='signerName'],[name='signerRole']").forEach(control => {
+    control.addEventListener("input", updateSignatureProgress);
+    control.addEventListener("change", updateSignatureProgress);
+  });
+  document.querySelector("#clear-signature").onclick = () => {
+    clearSignature(signatureCanvas);
+    updateSignatureProgress();
+  };
   document.querySelector("#confirm-signature").onclick = async () => {
     const reading = document.querySelector("[name='reading']:checked")?.value;
     const signerName = document.querySelector("[name='signerName']").value.trim();
@@ -970,7 +1032,7 @@ async function renderSignature() {
   };
 }
 
-function setupSignaturePad(canvas) {
+function setupSignaturePad(canvas, onChange = () => {}) {
   const context = canvas.getContext("2d"); context.lineWidth = 4; context.lineCap = "round"; context.strokeStyle = "#111";
   let drawing = false;
   const point = event => {
@@ -979,7 +1041,10 @@ function setupSignaturePad(canvas) {
   };
   const start = event => { event.preventDefault(); drawing = true; const p = point(event); context.beginPath(); context.moveTo(p.x, p.y); };
   const move = event => { if (!drawing) return; event.preventDefault(); const p = point(event); context.lineTo(p.x, p.y); context.stroke(); canvas.dataset.signed = "true"; };
-  const end = () => drawing = false;
+  const end = () => {
+    drawing = false;
+    onChange();
+  };
   canvas.addEventListener("pointerdown", start); canvas.addEventListener("pointermove", move); canvas.addEventListener("pointerup", end); canvas.addEventListener("pointerleave", end);
 }
 function clearSignature(canvas) { canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height); delete canvas.dataset.signed; }
