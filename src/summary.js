@@ -14,8 +14,10 @@ export function evidenceSummary(evidenceList) {
     const name = isDrug ? (item.drugType || item.name || "未填證物") : (item.name || item.evidenceCategory || "未填證物");
     const weight = item.netWeight || item.grossWeight;
     const weightText = weight ? `、${weight}${item.weightUnit || "公克"}` : isDrug ? "、重量未填" : "";
-    const quantityText = item.quantity ? `${item.quantity}${item.quantityUnit || ""}` : "";
-    return `${item.number || "未編號"}${name}${quantityText ? `共${quantityText}` : ""}${weightText}`;
+    const quantityText = item.evidenceCategory === "現金" && item.cashTotal
+      ? `總額${item.cashTotal}元`
+      : item.quantity ? `${item.quantity}${item.quantityUnit || ""}` : "";
+    return `${item.number || "未編號"}${name}${quantityText ? `${item.evidenceCategory === "現金" ? "" : "共"}${quantityText}` : ""}${weightText}`;
   }).join("；");
 }
 
