@@ -132,6 +132,9 @@ function statusClass(status) {
 async function renderCaseForm(existing) {
   const emptyCase = {
     id: uuid(), name: "", reason: "違反毒品危害防制條例", suspect: "", unit: "", agencyName: "", address: "",
+    suspectRole: "受搜索人", suspectGender: "", suspectBirthDate: "", suspectId: "",
+    suspectRegisteredAddress: "", suspectResidence: "", suspectPresent: "是",
+    searchLegalBasis: "出示搜索票", warrantNumber: "",
     addressCity: "臺北市", addressDistrict: "", addressRoad: "", addressCustomRoad: "",
     addressSection: "", addressLane: "", addressAlley: "", addressNumber: "", addressFloor: "", addressRoom: "", addressLocationNote: "",
     executionDate: nowIso(), searchStart: "", searchEnd: "", officer: "", recorder: "", tester: "", executors: "",
@@ -152,6 +155,10 @@ async function renderCaseForm(existing) {
       ${field("案件名稱", "name", data.name, true)}
       ${selectField("案由", "reason", ["違反毒品危害防制條例", "持有毒品", "販賣毒品", "施用毒品", "其他"], data.reason)}
       ${field("犯罪嫌疑人姓名", "suspect", data.suspect, true)}${field("執行單位", "unit", data.unit, true)}
+      ${selectField("受執行人身分", "suspectRole", ["受搜索人", "扣押物所有人", "扣押物持有人", "扣押物保管人"], data.suspectRole)}
+      ${selectField("性別", "suspectGender", ["", "男", "女", "其他"], data.suspectGender)}
+      ${field("出生年月日", "suspectBirthDate", data.suspectBirthDate, false, "例如80年1月1日")}
+      ${field("身分證統一編號", "suspectId", data.suspectId)}
       ${dateField("搜索開始時間", "searchStart", data.searchStart)}
       <div class="case-form-review"><strong>搜索結束時間</strong><p>完成現場搜索後，再到案件詳情按「結束搜索」記錄。</p></div>
     </section>
@@ -161,8 +168,13 @@ async function renderCaseForm(existing) {
       ${field("承辦人", "officer", data.officer)}${field("製作筆錄人員", "recorder", data.recorder)}
       ${field("初驗人員", "tester", data.tester)}${field("執行人員", "executors", data.executors)}
       ${field("在場人員", "presentPeople", data.presentPeople)}
+      ${field("受執行人戶籍地", "suspectRegisteredAddress", data.suspectRegisteredAddress)}
+      ${field("受執行人現居所", "suspectResidence", data.suspectResidence)}
+      ${selectField("受執行人是否在場", "suspectPresent", ["是", "否"], data.suspectPresent)}
     </section>
     <section class="form-step form-grid" data-step-panel="4">
+      ${selectField("執行依據", "searchLegalBasis", ["出示搜索票", "附帶搜索", "緊急搜索", "逕行搜索", "同意搜索", "其他"], data.searchLegalBasis)}
+      ${field("搜索票／核准字號", "warrantNumber", data.warrantNumber)}
       ${selectField("案件狀態", "status", statuses, data.status)}
       <label class="wide">備註<textarea name="notes" rows="3">${escapeHtml(data.notes)}</textarea></label>
       <div class="case-form-review wide"><strong>資料確認</strong><p>儲存後可新增證物、產生摘要及文件；所有資料均保存在此裝置。</p></div>

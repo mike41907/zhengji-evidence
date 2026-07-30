@@ -1,6 +1,16 @@
-export const APP_VERSION = "1.6.0";
+export const APP_VERSION = "1.7.0";
 
 export const CHANGELOG = [
+  {
+    version: "1.7.0",
+    date: "2026-07-30",
+    changes: [
+      "搜索扣押筆錄依三頁正式範本重製。",
+      "新增受執行人基本資料、執行依據及搜索票字號欄位。",
+      "加入執行告知事項、執行經過、結果、簽章及注意事項。",
+      "未由系統確認的程序事項維持未勾選，避免擅自認定。"
+    ]
+  },
   {
     version: "1.6.0",
     date: "2026-07-30",
