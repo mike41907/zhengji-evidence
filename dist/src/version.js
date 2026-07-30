@@ -1,6 +1,16 @@
-export const APP_VERSION = "1.12.0";
+export const APP_VERSION = "1.13.0";
 
 export const CHANGELOG = [
+  {
+    version: "1.13.0",
+    date: "2026-07-31",
+    changes: [
+      "毒品秤重改為只記錄毛重（含包裝）與重量單位。",
+      "移除包裝重量、淨重及自動扣除計算欄位。",
+      "案件摘要、初驗文件及照片說明統一使用含包裝毛重。",
+      "舊案件既有重量資料仍保留，避免歷史資料遺失。"
+    ]
+  },
   {
     version: "1.12.0",
     date: "2026-07-31",

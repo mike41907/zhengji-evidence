@@ -22,10 +22,13 @@ test("摘要固定欄位會代入案件與證物資料", () => {
   assert.match(summary, /本分局偵查隊於115年07月30日/);
   assert.match(summary, /王小明/);
   assert.match(summary, /甲基安非他命/);
-  assert.match(summary, /9.25公克/);
+  assert.match(summary, /毛重10.00公克/);
 });
 
-test("毒品明細優先使用淨重", () => assert.match(evidenceSummary(evidence), /9.25公克/));
+test("毒品明細使用含包裝毛重", () => {
+  assert.match(evidenceSummary(evidence), /毛重10.00公克/);
+  assert.doesNotMatch(evidenceSummary(evidence), /9.25公克/);
+});
 test("非毒品證物不會顯示重量未填", () => {
   const summary = evidenceSummary([{
     number: "證二", evidenceCategory: "手機", name: "iPhone 手機",

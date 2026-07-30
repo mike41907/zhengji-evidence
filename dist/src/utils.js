@@ -72,17 +72,6 @@ export const chineseNumber = number => {
   return String(number);
 };
 
-export function calculateNet(gross, packageWeight) {
-  if (gross === "" || gross == null || packageWeight === "" || packageWeight == null) return "";
-  const grossNumber = Number(gross);
-  const packageNumber = Number(packageWeight);
-  if (!Number.isFinite(grossNumber) || !Number.isFinite(packageNumber) || grossNumber < 0 || packageNumber < 0) {
-    throw new Error("重量必須是零或正數。");
-  }
-  if (grossNumber < packageNumber) throw new Error("毛重不得小於包裝重量，請修正後再儲存。");
-  return (grossNumber - packageNumber).toFixed(2);
-}
-
 export function cloneEvidenceSettings(source, { id, caseId, sequence, number, timestamp }) {
   return {
     ...source,

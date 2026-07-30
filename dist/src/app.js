@@ -1,5 +1,5 @@
 import { byCase, clearAllCaseData, deleteCaseData, deleteEvidenceData, get, getAll, importDatabase, openDatabase, put, remove, seedDefaults } from "./db.js";
-import { calculateNet, chineseNumber, cloneEvidenceSettings, downloadBlob, escapeHtml, inputToIso, localInputValue, nowIso, rocDateTime, sha256, toast, uuid } from "./utils.js";
+import { chineseNumber, cloneEvidenceSettings, downloadBlob, escapeHtml, inputToIso, localInputValue, nowIso, rocDateTime, sha256, toast, uuid } from "./utils.js";
 import { documentHash, generateDocument, photoCaption, wrapDocument } from "./documents.js";
 import { collectCase, exportAllBackup, exportCase } from "./exporter.js";
 import { DEFAULT_SUMMARY_TEMPLATE, renderSummary, SUMMARY_FIELDS, summaryValues, unknownSummaryFields } from "./summary.js";
@@ -570,9 +570,8 @@ async function wizardStep(step, evidence, photos, caseData) {
     ${evidence.evidenceCategory === "現金" ? "" : `<label>數量<div class="quick-values">${[1,2,3,4,5,10].map(value => `<button type="button" data-quantity="${value}">${value}</button>`).join("")}</div><input type="number" inputmode="numeric" min="1" name="quantity" value="${escapeHtml(evidence.quantity)}"></label>
     ${await optionSelect("數量單位", "quantityUnit", evidence.quantityUnit)}`}
     ${categorySpecificFields(evidence)}</div>`;
-  if (step === 3) return `${isDrug ? "" : '<div class="notice"><strong>非毒品證物</strong><p>重量與秤重照片為選填，可直接前往下一步。</p></div>'}<div class="form-grid"><label>毛重${isDrug ? "<em>必填</em>" : ""}<input type="number" inputmode="decimal" min="0" step="0.01" name="grossWeight" value="${escapeHtml(evidence.grossWeight)}"></label>
-    <label>包裝重量<input type="number" inputmode="decimal" min="0" step="0.01" name="packageWeight" value="${escapeHtml(evidence.packageWeight)}"></label>
-    <label>淨重<input name="netWeight" value="${escapeHtml(evidence.netWeight)}" readonly></label>${await optionSelect("重量單位", "weightUnit", evidence.weightUnit)}</div>
+  if (step === 3) return `${isDrug ? '<div class="notice"><strong>毛重（含包裝）</strong><p>毒品連同夾鏈袋或其他包裝一起秤重，不另扣除包裝重量。</p></div>' : '<div class="notice"><strong>非毒品證物</strong><p>毛重與秤重照片為選填，可直接前往下一步。</p></div>'}<div class="form-grid"><label>毛重（含包裝）${isDrug ? "<em>必填</em>" : ""}<input type="number" inputmode="decimal" min="0" step="0.01" name="grossWeight" value="${escapeHtml(evidence.grossWeight)}"></label>
+    ${await optionSelect("重量單位", "weightUnit", evidence.weightUnit)}</div>
     ${photoStep("秤重照片", photos)}`;
   if (step === 4) return `${isDrug ? "" : '<div class="notice"><strong>非毒品證物</strong><p>毒品初驗資料為選填，可直接進行完整檢查。</p></div>'}<div class="form-grid">${await optionSelect("初驗試劑", "reagent", evidence.reagent)}${await optionSelect("初驗結果", "testResult", evidence.testResult)}
     <label class="wide">反應情形<textarea name="reaction">${escapeHtml(evidence.reaction)}</textarea></label></div>${photoStep("初驗照片", photos, evidence, "testAt", "初驗時間")}`;
@@ -705,10 +704,6 @@ function bindWizard(evidence, photos, caseData) {
     if (total) total.value = denomination && billCount ? String(denomination * billCount) : "";
   };
   document.querySelectorAll("[name='denomination'],[name='billCount']").forEach(input => input?.addEventListener("input", updateCashTotal));
-  document.querySelectorAll("[name='grossWeight'],[name='packageWeight']").forEach(input => input?.addEventListener("input", () => {
-    try { document.querySelector("[name='netWeight']").value = calculateNet(document.querySelector("[name='grossWeight']").value, document.querySelector("[name='packageWeight']").value); }
-    catch (error) { toast(error.message, "錯誤"); }
-  }));
   document.querySelectorAll("[data-photo-type]").forEach(input => input.onchange = event => addPhoto(event.target.files[0], event.target.dataset.photoType, evidence, photos));
   document.querySelectorAll("[data-delete-photo]").forEach(button => button.onclick = async () => {
     const photo = photos.find(item => item.id === button.dataset.deletePhoto);
@@ -789,11 +784,6 @@ async function saveWizard(evidence) {
       toast("證物編號重複，請重新選擇或輸入。", "錯誤"); return false;
     }
   }
-  try {
-    if ("grossWeight" in changes || "packageWeight" in changes) {
-      changes.netWeight = calculateNet(changes.grossWeight ?? evidence.grossWeight, changes.packageWeight ?? evidence.packageWeight);
-    }
-  } catch (error) { toast(error.message, "錯誤"); return false; }
   if ("space" in changes || "exactLocation" in changes || "positionExtra" in changes) {
     const space = changes.space ?? evidence.space, exact = changes.exactLocation ?? evidence.exactLocation, extra = changes.positionExtra ?? evidence.positionExtra;
     if (!document.querySelector("[name='locationText']")?.dataset.edited) changes.locationText = `於上址${space || ""}${exact || ""}${extra || ""}發現。`;

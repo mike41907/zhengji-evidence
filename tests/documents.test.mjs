@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateDocument, wrapDocument } from "../src/documents.js";
+import { generateDocument, photoCaption, wrapDocument } from "../src/documents.js";
 
 test("扣押物品目錄表符合正式欄位與最少十一列", () => {
   const html = generateDocument("扣押物品目錄表", {
@@ -47,4 +47,16 @@ test("搜索扣押筆錄簽名帶入受執行人欄位", () => {
   }, [], [], { signed: true, signature, signerName: "王小明" });
   assert.match(html, /class="search-record-signer"/);
   assert.equal((html.match(/data:image\/png;base64,TEST_SIGNATURE/g) || []).length, 3);
+});
+
+test("毒品文件與照片說明只使用含包裝毛重", () => {
+  const evidence = {
+    number: "證一", evidenceCategory: "毒品", name: "疑似毒品", quantity: "1", quantityUnit: "包",
+    grossWeight: "10.25", packageWeight: "1.00", netWeight: "9.25", weightUnit: "公克"
+  };
+  const html = generateDocument("毒品初步檢驗紀錄表", { suspect: "王小明" }, [evidence], []);
+  assert.match(html, /毛重（含包裝）/);
+  assert.doesNotMatch(html, /包裝重量/);
+  assert.doesNotMatch(html, /淨重/);
+  assert.match(photoCaption(evidence, "秤重照片"), /連同包裝.*毛重10.25公克/);
 });

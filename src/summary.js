@@ -12,8 +12,8 @@ export function evidenceSummary(evidenceList) {
   return evidenceList.map(item => {
     const isDrug = (item.evidenceCategory || "毒品") === "毒品";
     const name = isDrug ? (item.drugType || item.name || "未填證物") : (item.name || item.evidenceCategory || "未填證物");
-    const weight = item.netWeight || item.grossWeight;
-    const weightText = weight ? `、${weight}${item.weightUnit || "公克"}` : isDrug ? "、重量未填" : "";
+    const weight = item.grossWeight;
+    const weightText = weight ? `、毛重${weight}${item.weightUnit || "公克"}` : isDrug ? "、毛重未填" : "";
     const quantityText = item.evidenceCategory === "現金" && item.cashTotal
       ? `總額${item.cashTotal}元`
       : item.quantity ? `${item.quantity}${item.quantityUnit || ""}` : "";
