@@ -138,7 +138,8 @@ async function renderCaseForm(existing) {
       ${field("案件名稱", "name", data.name, true)}
       ${selectField("案由", "reason", ["違反毒品危害防制條例", "持有毒品", "販賣毒品", "施用毒品", "其他"], data.reason)}
       ${field("犯罪嫌疑人姓名", "suspect", data.suspect, true)}${field("執行單位", "unit", data.unit, true)}
-      ${dateField("搜索開始時間", "searchStart", data.searchStart)}${dateField("搜索結束時間", "searchEnd", data.searchEnd)}
+      ${dateField("搜索開始時間", "searchStart", data.searchStart)}
+      <div class="case-form-review"><strong>搜索結束時間</strong><p>完成現場搜索後，再到案件詳情按「結束搜索」記錄。</p></div>
     </section>
     <section class="form-step form-grid" data-step-panel="2">${addressFields(data)}</section>
     <section class="form-step form-grid" data-step-panel="3">
@@ -166,7 +167,7 @@ async function renderCaseForm(existing) {
     if (!values.name.trim() || !values.suspect.trim() || !values.unit.trim() || !values.address.trim()) {
       return toast("請完成案件名稱、犯罪嫌疑人、執行單位與執行地址。", "錯誤");
     }
-    const item = { ...data, ...values, searchStart: inputToIso(values.searchStart), searchEnd: inputToIso(values.searchEnd), updatedAt: nowIso() };
+    const item = { ...data, ...values, searchStart: inputToIso(values.searchStart), searchEnd: data.searchEnd || "", updatedAt: nowIso() };
     await put("cases", item);
     toast("案件已儲存。");
     state.caseId = item.id;
@@ -282,6 +283,16 @@ async function renderCaseDetail() {
   shell(`<section class="case-summary panel"><div><span class="badge ${statusClass(caseData.status)}">${caseData.status}</span><h2>${escapeHtml(caseData.name)}</h2>
     <p>${escapeHtml(caseData.reason)}</p><p>${escapeHtml(caseData.address)}</p></div>
     <div class="progress-ring"><strong>${completion}%</strong><span>採證完成度</span></div></section>
+    <section class="search-timeline panel">
+      <div><span>搜索開始</span><strong>${rocDateTime(caseData.searchStart)}</strong></div>
+      <span class="timeline-arrow">→</span>
+      <div><span>搜索結束</span><strong>${caseData.searchEnd ? rocDateTime(caseData.searchEnd) : "搜索進行中"}</strong></div>
+      <div class="search-time-actions">
+        ${!caseData.searchStart ? '<button class="primary" id="start-search">開始搜索</button>' : ""}
+        ${caseData.searchStart && !caseData.searchEnd ? '<button class="primary" id="end-search">結束搜索</button>' : ""}
+        ${caseData.searchStart ? '<button id="edit-search-time">修改時間</button>' : ""}
+      </div>
+    </section>
     <section class="action-row"><button id="edit-case">修改案件資料</button><button class="primary" id="add-evidence">新增證物</button>
       <button data-go="案件摘要">產生案件摘要</button><button data-go="文件中心">產生文件</button><button id="export-case">匯出完整案件</button></section>
     <section><div class="section-title"><h2>證物卡片</h2><span>${bundle.evidence.length} 件</span></div>
@@ -291,6 +302,30 @@ async function renderCaseDetail() {
   document.querySelector("#add-evidence").onclick = () => createEvidence(caseData, bundle.evidence);
   document.querySelector("[data-go='案件摘要']").onclick = () => navigate("案件摘要");
   document.querySelector("[data-go='文件中心']").onclick = () => navigate("文件中心");
+  document.querySelector("#start-search")?.addEventListener("click", async () => {
+    if (!confirm("現在開始搜索並記錄時間？")) return;
+    await put("cases", { ...caseData, searchStart: nowIso(), status: caseData.status === "草稿" ? "採證中" : caseData.status, updatedAt: nowIso() });
+    toast("已記錄搜索開始時間。");
+    renderCaseDetail();
+  });
+  document.querySelector("#end-search")?.addEventListener("click", async () => {
+    if (!confirm("確定現場搜索已結束？系統將記錄現在時間。")) return;
+    await put("cases", { ...caseData, searchEnd: nowIso(), updatedAt: nowIso() });
+    toast("已記錄搜索結束時間。");
+    renderCaseDetail();
+  });
+  document.querySelector("#edit-search-time")?.addEventListener("click", async () => {
+    const startValue = prompt("搜索開始時間（年-月-日 時:分）", localInputValue(caseData.searchStart).replace("T", " "));
+    if (startValue === null) return;
+    const endValue = prompt("搜索結束時間（尚未結束請留空）", localInputValue(caseData.searchEnd).replace("T", " "));
+    if (endValue === null) return;
+    const searchStart = inputToIso(startValue);
+    const searchEnd = inputToIso(endValue);
+    if (searchEnd && new Date(searchEnd) < new Date(searchStart)) return toast("搜索結束時間不得早於開始時間。", "錯誤");
+    await put("cases", { ...caseData, searchStart, searchEnd, updatedAt: nowIso() });
+    toast("搜索時間已更新。");
+    renderCaseDetail();
+  });
   document.querySelector("#export-case").onclick = async () => {
     try { await exportCase(caseData, bundle.evidence, bundle.photos, bundle.documents, bundle.signatures); toast("完整案件壓縮檔已產生。"); }
     catch (error) { toast(error.message, "錯誤"); }
