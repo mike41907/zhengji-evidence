@@ -856,8 +856,12 @@ async function renderCaseSummary() {
 async function renderDocuments() {
   const caseData = await get("cases", state.caseId);
   const { evidence, photos, documents } = await collectCase(state.caseId);
-  const content = generateDocument(state.documentType, caseData, evidence, photos);
+  const latestSigned = documents.filter(item => item.type === state.documentType && item.status === "已簽署")
+    .sort((a, b) => String(b.signedAt || b.createdAt).localeCompare(String(a.signedAt || a.createdAt)))[0];
+  const content = latestSigned ? extractDocumentBody(latestSigned.content) : generateDocument(state.documentType, caseData, evidence, photos);
+  const documentStatus = latestSigned ? `已簽署｜第 ${latestSigned.version} 版` : "未簽署工作稿";
   shell(`<label class="document-picker">文件種類<select id="document-type">${documentTypes.map(type => `<option ${type === state.documentType ? "selected" : ""}>${type}</option>`).join("")}</select></label>
+    <div class="document-status ${latestSigned ? "signed" : ""}">${documentStatus}</div>
     <section class="document-actions"><button id="regenerate">重新產生</button><button id="editable-export">匯出可修改文件</button><button id="print-document">列印</button><button id="pdf-export">匯出 PDF</button><button class="primary" data-go="簽署">進入簽署流程</button></section>
     <section class="document-preview">${content}</section>`, "文件中心");
   document.querySelector("#document-type").onchange = event => { state.documentType = event.target.value; renderDocuments(); };
@@ -875,10 +879,15 @@ async function renderDocuments() {
       restoreButton(button);
     }
   };
-  document.querySelector("#editable-export").onclick = () => downloadBlob(new Blob([wrapDocument(content)], { type: "application/msword" }), `${state.documentType}_未簽署工作稿.doc`);
+  document.querySelector("#editable-export").onclick = () => downloadBlob(new Blob([wrapDocument(content)], { type: "application/msword" }), `${state.documentType}_${latestSigned ? `已簽署第${latestSigned.version}版` : "未簽署工作稿"}.doc`);
   document.querySelector("#print-document").onclick = () => openPrintDocument(content, false);
   document.querySelector("#pdf-export").onclick = () => openPrintDocument(content, true);
   document.querySelector("[data-go='簽署']").onclick = () => navigate("簽署");
+}
+
+function extractDocumentBody(html) {
+  if (!html || !/<body[\s>]/i.test(html)) return html || "";
+  return new DOMParser().parseFromString(html, "text/html").body.innerHTML;
 }
 
 function setButtonBusy(button, label) {

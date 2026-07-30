@@ -1,6 +1,15 @@
-export const APP_VERSION = "1.9.3";
+export const APP_VERSION = "1.9.4";
 
 export const CHANGELOG = [
+  {
+    version: "1.9.4",
+    date: "2026-07-30",
+    changes: [
+      "簽名後自動帶入搜索扣押筆錄受執行人簽名位置。",
+      "文件中心優先顯示最新已簽署版本。",
+      "列印、PDF 與可修改文件會輸出目前顯示的簽署版本。"
+    ]
+  },
   {
     version: "1.9.3",
     date: "2026-07-30",
