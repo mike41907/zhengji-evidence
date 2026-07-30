@@ -1,6 +1,15 @@
-export const APP_VERSION = "1.3.0";
+export const APP_VERSION = "1.4.0";
 
 export const CHANGELOG = [
+  {
+    version: "1.4.0",
+    date: "2026-07-30",
+    changes: [
+      "新增毒品、施用器具、電子磅秤、手機、現金、包裝材料及其他證物類別。",
+      "非毒品證物不再強制要求秤重及毒品初驗資料。",
+      "摘要與毒品初驗紀錄表依證物類別正確產製。"
+    ]
+  },
   {
     version: "1.3.0",
     date: "2026-07-30",
