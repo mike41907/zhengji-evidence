@@ -1,6 +1,15 @@
-export const APP_VERSION = "1.9.2";
+export const APP_VERSION = "1.9.3";
 
 export const CHANGELOG = [
+  {
+    version: "1.9.3",
+    date: "2026-07-30",
+    changes: [
+      "修正 iPhone 狀態列造成頂部品牌文字被裁切。",
+      "新增重新整理系統功能。",
+      "新增清除證跡離線暫存並重新整理，且保留所有案件資料。"
+    ]
+  },
   {
     version: "1.9.2",
     date: "2026-07-30",
