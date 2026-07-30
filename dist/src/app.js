@@ -931,7 +931,21 @@ async function renderSignature() {
       <div class="action-row"><button id="clear-signature">清除重簽</button><button class="primary" id="confirm-signature" ${issues.length ? "disabled" : ""}>確認簽署</button></div>
     </section>`, "文件簽署");
   const preview = document.querySelector("#signature-preview");
-  preview.onscroll = () => { if (preview.scrollTop + preview.clientHeight >= preview.scrollHeight - 30) state.previewRead = true; };
+  state.previewRead = false;
+  const markPreviewRead = () => {
+    if (preview.scrollTop + preview.clientHeight >= preview.scrollHeight - 30) {
+      state.previewRead = true;
+      preview.classList.add("read-complete");
+    }
+  };
+  preview.addEventListener("scroll", markPreviewRead, { passive: true });
+  if ("IntersectionObserver" in window) {
+    const endObserver = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) markPreviewRead();
+    }, { root: preview, threshold: 0.5 });
+    endObserver.observe(document.querySelector("#document-end"));
+  }
+  requestAnimationFrame(markPreviewRead);
   setupSignaturePad(document.querySelector("#signature-pad"));
   document.querySelector("#clear-signature").onclick = () => clearSignature(document.querySelector("#signature-pad"));
   document.querySelector("#confirm-signature").onclick = async () => {

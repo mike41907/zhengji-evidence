@@ -1,6 +1,15 @@
-export const APP_VERSION = "1.9.5";
+export const APP_VERSION = "1.9.6";
 
 export const CHANGELOG = [
+  {
+    version: "1.9.6",
+    date: "2026-07-30",
+    changes: [
+      "修正手機版文件簽署預覽無法向下捲動，導致簽名無法儲存的問題。",
+      "加入文件底部自動偵測及 iPhone 慣性滑動。",
+      "縮短手機簽名板並固定簽署操作按鈕，方便單手操作。"
+    ]
+  },
   {
     version: "1.9.5",
     date: "2026-07-30",
