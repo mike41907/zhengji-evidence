@@ -14,7 +14,13 @@ function shell(content, title = "證跡") {
   app.innerHTML = `<header class="topbar"><button class="brand" data-go="首頁"><span>證跡</span><small>證物採證與文件產製系統</small></button>
     <div><span class="offline" id="network-status">${navigator.onLine ? "本機運作中" : "離線運作中"}</span></div></header>
     <main><div class="page-heading">${state.page !== "首頁" ? '<button class="back" data-back>返回</button>' : ""}<h1>${escapeHtml(title)}</h1></div>${content}</main>
-    <footer class="app-footer">證跡第一版｜資料只保存在此裝置</footer>`;
+    <footer class="app-footer">證跡第一版｜資料只保存在此裝置</footer>
+    <nav class="mobile-tabbar" aria-label="主要功能">
+      <button data-go="首頁" class="${state.page === "首頁" ? "active" : ""}"><span>⌂</span>首頁</button>
+      <button data-go="案件列表" class="${["案件列表", "案件詳情", "案件摘要"].includes(state.page) ? "active" : ""}"><span>▤</span>案件</button>
+      <button data-go="新增案件" class="${state.page === "新增案件" ? "active primary-tab" : "primary-tab"}"><span>＋</span>新增</button>
+      <button data-go="資料管理" class="${state.page === "資料管理" ? "active" : ""}"><span>⇅</span>備份</button>
+    </nav>`;
   bindGlobal();
 }
 
@@ -64,7 +70,7 @@ async function render() {
 async function renderHome() {
   const cases = await getAll("cases");
   const counts = Object.fromEntries(statuses.map(status => [status, cases.filter(item => item.status === status).length]));
-  shell(`<section class="home-overview"><div><p class="eyebrow">完全本地端・可離線使用</p><h1>證物採證與文件產製</h1><p>案件、照片與簽名只保存在此裝置。</p></div>
+  shell(`<section class="home-overview"><div><p class="eyebrow">完全本地端・可離線使用</p><h1>現場案件工作台</h1><p>資料只保存在此裝置。</p></div>
     <button class="primary large" data-go="新增案件">＋ 新增案件</button></section>
     <section class="status-grid compact">
       ${["採證中", "已完成", "待簽署", "已簽署"].map(status => `<button class="status-card" data-go="案件列表"><strong>${counts[status]}</strong><span>${status}案件</span></button>`).join("")}
@@ -123,19 +129,36 @@ async function renderCaseForm(existing) {
     executionDate: nowIso(), searchStart: "", searchEnd: "", officer: "", recorder: "", tester: "", executors: "",
     presentPeople: "", notes: "", status: "草稿", createdAt: nowIso(), updatedAt: nowIso(), lockedAt: ""
   };
-  shell(`<form id="case-form" class="panel form-grid">
-    ${field("案件名稱", "name", data.name, true)}
-    ${selectField("案由", "reason", ["違反毒品危害防制條例", "持有毒品", "販賣毒品", "施用毒品", "其他"], data.reason)}
-    ${field("犯罪嫌疑人姓名", "suspect", data.suspect, true)}${field("執行單位", "unit", data.unit, true)}
-    ${addressFields(data)}
-    ${dateField("搜索開始時間", "searchStart", data.searchStart)}${dateField("搜索結束時間", "searchEnd", data.searchEnd)}
-    ${field("承辦人", "officer", data.officer)}${field("製作筆錄人員", "recorder", data.recorder)}
-    ${field("初驗人員", "tester", data.tester)}${field("執行人員", "executors", data.executors)}
-    ${field("在場人員", "presentPeople", data.presentPeople)}${selectField("案件狀態", "status", statuses, data.status)}
-    <label class="wide">備註<textarea name="notes" rows="3">${escapeHtml(data.notes)}</textarea></label>
-    <div class="sticky-actions"><button type="button" data-back>取消</button><button class="primary" type="submit">儲存案件</button></div>
+  shell(`<form id="case-form" class="panel case-form">
+    <div class="form-stepper" role="tablist" aria-label="案件資料步驟">
+      ${["基本", "地址", "人員", "確認"].map((label, index) => `<button type="button" data-form-step="${index + 1}" class="${index === 0 ? "current" : ""}"><span>${index + 1}</span>${label}</button>`).join("")}
+    </div>
+    <section class="form-step form-grid current" data-step-panel="1">
+      ${field("案件名稱", "name", data.name, true)}
+      ${selectField("案由", "reason", ["違反毒品危害防制條例", "持有毒品", "販賣毒品", "施用毒品", "其他"], data.reason)}
+      ${field("犯罪嫌疑人姓名", "suspect", data.suspect, true)}${field("執行單位", "unit", data.unit, true)}
+      ${dateField("搜索開始時間", "searchStart", data.searchStart)}${dateField("搜索結束時間", "searchEnd", data.searchEnd)}
+    </section>
+    <section class="form-step form-grid" data-step-panel="2">${addressFields(data)}</section>
+    <section class="form-step form-grid" data-step-panel="3">
+      ${field("承辦人", "officer", data.officer)}${field("製作筆錄人員", "recorder", data.recorder)}
+      ${field("初驗人員", "tester", data.tester)}${field("執行人員", "executors", data.executors)}
+      ${field("在場人員", "presentPeople", data.presentPeople)}
+    </section>
+    <section class="form-step form-grid" data-step-panel="4">
+      ${selectField("案件狀態", "status", statuses, data.status)}
+      <label class="wide">備註<textarea name="notes" rows="3">${escapeHtml(data.notes)}</textarea></label>
+      <div class="case-form-review wide"><strong>資料確認</strong><p>儲存後可新增證物、產生摘要及文件；所有資料均保存在此裝置。</p></div>
+    </section>
+    <div class="case-form-actions">
+      <button type="button" id="case-step-previous">上一步</button>
+      <span id="case-step-status">1 / 4</span>
+      <button type="button" class="primary" id="case-step-next">下一步</button>
+      <button class="primary hidden" id="case-save" type="submit">儲存案件</button>
+    </div>
   </form>`, existing ? "修改案件資料" : "新增案件");
   bindAddressBuilder(data);
+  bindCaseFormSteps();
   document.querySelector("#case-form").onsubmit = async event => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
@@ -148,6 +171,44 @@ async function renderCaseForm(existing) {
     state.caseId = item.id;
     navigate("案件詳情", item.id);
   };
+}
+
+function bindCaseFormSteps() {
+  const form = document.querySelector("#case-form");
+  const panels = [...form.querySelectorAll("[data-step-panel]")];
+  const tabs = [...form.querySelectorAll("[data-form-step]")];
+  const previous = form.querySelector("#case-step-previous");
+  const next = form.querySelector("#case-step-next");
+  const save = form.querySelector("#case-save");
+  const status = form.querySelector("#case-step-status");
+  let current = 1;
+  const show = step => {
+    current = Math.min(4, Math.max(1, step));
+    panels.forEach(panel => panel.classList.toggle("current", Number(panel.dataset.stepPanel) === current));
+    tabs.forEach(tab => {
+      const tabStep = Number(tab.dataset.formStep);
+      tab.classList.toggle("current", tabStep === current);
+      tab.classList.toggle("complete", tabStep < current);
+    });
+    previous.disabled = current === 1;
+    next.classList.toggle("hidden", current === 4);
+    save.classList.toggle("hidden", current !== 4);
+    status.textContent = `${current} / 4`;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const currentIsValid = () => {
+    const invalid = panels[current - 1].querySelector(":invalid");
+    if (!invalid) return true;
+    invalid.reportValidity();
+    return false;
+  };
+  previous.onclick = () => show(current - 1);
+  next.onclick = () => currentIsValid() && show(current + 1);
+  tabs.forEach(tab => tab.onclick = () => {
+    const target = Number(tab.dataset.formStep);
+    if (target <= current || currentIsValid()) show(target);
+  });
+  show(1);
 }
 
 function addressFields(data) {
