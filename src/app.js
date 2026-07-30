@@ -552,7 +552,10 @@ function photoStep(type, photos, evidence, timeKey, label) {
   return `<section class="photo-capture"><h2>${type}</h2>${photo ? `<div class="photo-preview"><img src="${sourceUrl}" alt="${type}">
     <div><strong>${escapeHtml(photo.fileName)}</strong><span>${Math.round(photo.size / 1024)} 千位元組</span><span>摘要：${photo.hash.slice(0, 16)}…</span>
     <button type="button" class="danger-button" data-delete-photo="${photo.id}">刪除照片</button></div></div>` : `<div class="camera-placeholder">尚未拍攝</div>`}
-    <label class="camera-button">${photo ? "重新拍攝或更換照片" : "拍攝或選取照片"}<input type="file" accept="image/*" capture="environment" data-photo-type="${type}"></label>
+    <div class="photo-source-actions">
+      <label class="photo-source-button camera-button">${photo ? "重新拍照" : "直接拍照"}<input type="file" accept="image/*" capture="environment" data-photo-type="${type}"></label>
+      <label class="photo-source-button album-button">${photo ? "從相簿更換" : "從相簿選擇"}<input type="file" accept="image/*" data-photo-type="${type}"></label>
+    </div>
     ${timeKey ? `<div class="time-card"><strong>${label}</strong><span>${rocDateTime(evidence[timeKey])}</span><small>時間來源：${escapeHtml(evidence[timeKey.replace("At", "TimeSource")] || "尚未取得")}</small>
     <div class="time-actions"><button type="button" data-time-now="${timeKey}">使用現在時間</button><button type="button" data-time-edit="${timeKey}">手動修改</button><button type="button" data-time-clear="${timeKey}">清除時間</button></div></div>` : ""}</section>`;
 }
