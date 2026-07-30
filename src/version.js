@@ -1,6 +1,15 @@
-export const APP_VERSION = "1.7.0";
+export const APP_VERSION = "1.8.0";
 
 export const CHANGELOG = [
+  {
+    version: "1.8.0",
+    date: "2026-07-30",
+    changes: [
+      "修正備份與還原頁面在手機上的卡片欄位錯位。",
+      "新增一鍵清除全部案件，並以兩次確認防止誤觸。",
+      "清除案件時保留常用選項、人員及地址設定。"
+    ]
+  },
   {
     version: "1.7.0",
     date: "2026-07-30",
