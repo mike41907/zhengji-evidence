@@ -8,7 +8,7 @@ import { APP_VERSION, CHANGELOG } from "./version.js";
 
 const app = document.querySelector("#app");
 const state = { page: "首頁", caseId: "", evidenceId: "", step: 1, documentType: "搜索扣押筆錄", previewRead: false };
-const documentTypes = ["搜索扣押筆錄", "毒品初步檢驗紀錄表", "證物照片紀錄", "扣押物品清冊"];
+const documentTypes = ["搜索扣押筆錄", "毒品初步檢驗紀錄表", "證物照片紀錄", "扣押物品目錄表"];
 const statuses = ["草稿", "採證中", "已完成", "待簽署", "已簽署", "已作廢"];
 const CASE_DRAFT_KEY = "證跡_新增案件草稿";
 const evidenceCategories = ["毒品", "毒品施用器具", "電子磅秤", "手機", "現金", "包裝材料", "其他"];
@@ -131,7 +131,7 @@ function statusClass(status) {
 
 async function renderCaseForm(existing) {
   const emptyCase = {
-    id: uuid(), name: "", reason: "違反毒品危害防制條例", suspect: "", unit: "", address: "",
+    id: uuid(), name: "", reason: "違反毒品危害防制條例", suspect: "", unit: "", agencyName: "", address: "",
     addressCity: "臺北市", addressDistrict: "", addressRoad: "", addressCustomRoad: "",
     addressSection: "", addressLane: "", addressAlley: "", addressNumber: "", addressFloor: "", addressRoom: "", addressLocationNote: "",
     executionDate: nowIso(), searchStart: "", searchEnd: "", officer: "", recorder: "", tester: "", executors: "",
@@ -157,6 +157,7 @@ async function renderCaseForm(existing) {
     </section>
     <section class="form-step form-grid" data-step-panel="2">${addressFields(data)}</section>
     <section class="form-step form-grid" data-step-panel="3">
+      ${field("機關全銜（文件標題）", "agencyName", data.agencyName, false, "例如內政部警政署航空警察局臺北分局")}
       ${field("承辦人", "officer", data.officer)}${field("製作筆錄人員", "recorder", data.recorder)}
       ${field("初驗人員", "tester", data.tester)}${field("執行人員", "executors", data.executors)}
       ${field("在場人員", "presentPeople", data.presentPeople)}
@@ -414,9 +415,10 @@ async function createEvidence(caseData, current, selectedCategory = "") {
   const sequence = current.length + 1;
   const prefix = localStorage.getItem("證物編號格式") || "證";
   const defaultName = evidenceCategory === "毒品" ? "疑似毒品" : evidenceCategory === "其他" ? "其他證物" : evidenceCategory;
+  const defaultUnit = ({ "毒品": "包", "毒品施用器具": "組", "電子磅秤": "台", "手機": "支", "現金": "張", "包裝材料": "批", "其他": "件" })[evidenceCategory] || "件";
   const item = {
     id: uuid(), caseId: caseData.id, sequence, number: `${prefix}${chineseNumber(sequence)}`, evidenceCategory, name: defaultName,
-    drugType: "", appearance: "", color: "", packaging: "", quantity: "", quantityUnit: "包",
+    drugType: "", appearance: "", color: "", packaging: "", quantity: "", quantityUnit: defaultUnit,
     grossWeight: "", packageWeight: "", netWeight: "", weightUnit: "公克", foundAddress: caseData.address,
     space: "", exactLocation: "", positionExtra: "", locationText: "", foundAt: "", foundOriginalAt: "", foundTimeSource: "",
     reagent: "", testResult: "", reaction: "",
@@ -515,7 +517,9 @@ function categorySpecificFields(evidence) {
 async function optionSelect(category, name, value) {
   const options = (await getAll("options")).filter(item => item.category === category && item.enabled)
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || Number(b.favorite) - Number(a.favorite) || b.useCount - a.useCount || a.order - b.order);
-  return `<label>${category}<select name="${name}"><option value="">請選擇</option>${options.map(item => `<option value="${escapeHtml(item.name)}" ${item.name === value ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select></label>`;
+  const names = options.map(item => item.name);
+  const extra = value && !names.includes(value) ? `<option selected>${escapeHtml(value)}</option>` : "";
+  return `<label>${category}<select name="${name}"><option value="">請選擇</option>${extra}${options.map(item => `<option value="${escapeHtml(item.name)}" ${item.name === value ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}</select></label>`;
 }
 
 function photoStep(type, photos, evidence, timeKey, label) {

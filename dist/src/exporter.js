@@ -12,7 +12,7 @@ export async function exportCase(caseData, evidence, photos, documents, signatur
   const dataFolder = zip.folder("五、案件資料");
   const integrityFolder = zip.folder("六、完整性資料");
   const manifest = [];
-  const types = ["搜索扣押筆錄", "毒品初步檢驗紀錄表", "證物照片紀錄", "扣押物品清冊"];
+  const types = ["搜索扣押筆錄", "毒品初步檢驗紀錄表", "證物照片紀錄", "扣押物品目錄表"];
   for (const type of types) {
     const html = wrapDocument(generateDocument(type, caseData, evidence, photos));
     draftFolder.file(`${type}_未簽署工作稿.doc`, html);

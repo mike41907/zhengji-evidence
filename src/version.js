@@ -1,6 +1,16 @@
-export const APP_VERSION = "1.5.0";
+export const APP_VERSION = "1.6.0";
 
 export const CHANGELOG = [
+  {
+    version: "1.6.0",
+    date: "2026-07-30",
+    changes: [
+      "扣押物品文件改為正式扣押物品目錄表格式。",
+      "欄位調整為編號、品名、單位、數量、所有人／持有人／保管人及備考。",
+      "新增機關全銜文件標題、逐項簽章空間及至少十一列目錄。",
+      "品名依證物類別自動組合詳細資料。"
+    ]
+  },
   {
     version: "1.5.0",
     date: "2026-07-30",
