@@ -39,3 +39,12 @@ test("列印文件使用 A4 PDF 版面與正式文件樣式", () => {
   assert.match(html, /\.seizure-inventory/);
   assert.match(html, /break-after:page/);
 });
+
+test("搜索扣押筆錄簽名帶入受執行人欄位", () => {
+  const signature = "data:image/png;base64,TEST_SIGNATURE";
+  const html = generateDocument("搜索扣押筆錄", {
+    unit: "測試單位", suspect: "王小明", suspectRole: "受搜索人"
+  }, [], [], { signed: true, signature, signerName: "王小明" });
+  assert.match(html, /class="search-record-signer"/);
+  assert.equal((html.match(/data:image\/png;base64,TEST_SIGNATURE/g) || []).length, 3);
+});
