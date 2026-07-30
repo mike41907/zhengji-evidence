@@ -137,7 +137,7 @@ function statusClass(status) {
 
 async function renderCaseForm(existing) {
   const emptyCase = {
-    id: uuid(), name: "", reason: "違反毒品危害防制條例", suspect: "", unit: "", agencyName: "", address: "",
+    id: uuid(), name: "", reason: "違反毒品危害防制條例", suspect: "", unit: "", agencyName: "內政部警政署航空警察局臺北分局", address: "",
     suspectRole: "受搜索人", suspectGender: "", suspectBirthDate: "", suspectId: "",
     suspectRegisteredAddress: "", suspectResidence: "", suspectPresent: "是",
     searchLegalBasis: "出示搜索票", warrantNumber: "",

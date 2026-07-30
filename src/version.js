@@ -1,6 +1,14 @@
-export const APP_VERSION = "1.10.0";
+export const APP_VERSION = "1.10.1";
 
 export const CHANGELOG = [
+  {
+    version: "1.10.1",
+    date: "2026-07-31",
+    changes: [
+      "新增案件時，執行機關預設為內政部警政署航空警察局臺北分局。",
+      "既有案件內容維持不變，仍可依案件需要修改機關全銜。"
+    ]
+  },
   {
     version: "1.10.0",
     date: "2026-07-30",
