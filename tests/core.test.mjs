@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chineseNumber, cloneEvidenceSettings, rocDateTime, safeFileName } from "../src/utils.js";
+import { adjacentEvidenceStep, chineseNumber, cloneEvidenceSettings, evidenceLocationDefaults, rocDateTime, safeFileName } from "../src/utils.js";
 test("民國日期時間格式一致", () => assert.match(rocDateTime("2026-07-29T04:05:06Z"), /^\d{3}年\d{2}月\d{2}日\d{2}時\d{2}分\d{2}秒$/));
 test("中文序號正確", () => { assert.equal(chineseNumber(1), "一"); assert.equal(chineseNumber(12), "十二"); assert.equal(chineseNumber(20), "二十"); });
 test("檔名會移除不允許字元", () => assert.equal(safeFileName('案:號/一?'), "案＿號＿一＿"));
@@ -20,4 +20,20 @@ test("複製證物設定不會帶入個別採證資料", () => {
   for (const key of ["quantity", "foundAt", "testAt", "grossWeight", "packageWeight", "netWeight", "imei", "phoneNumber", "testResult", "notes"]) {
     assert.equal(copy[key], "");
   }
+});
+
+test("新增下一件證物會沿用最近一件的發現位置", () => {
+  const defaults = evidenceLocationDefaults([
+    { sequence: 1, space: "客廳", exactLocation: "桌面", locationText: "舊位置" },
+    { sequence: 2, space: "臥室", exactLocation: "床頭櫃", positionExtra: "抽屜內", locationText: "於上址臥室床頭櫃抽屜內發現。" }
+  ]);
+  assert.equal(defaults.space, "臥室");
+  assert.equal(defaults.exactLocation, "床頭櫃");
+  assert.equal(defaults.locationText, "於上址臥室床頭櫃抽屜內發現。");
+});
+
+test("非毒品證物略過秤重與毒品初驗步驟", () => {
+  assert.equal(adjacentEvidenceStep(2, "手機", 1), 5);
+  assert.equal(adjacentEvidenceStep(5, "手機", -1), 2);
+  assert.equal(adjacentEvidenceStep(2, "毒品", 1), 3);
 });

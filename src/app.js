@@ -1,5 +1,5 @@
 import { byCase, clearAllCaseData, deleteCaseData, deleteEvidenceData, get, getAll, importDatabase, openDatabase, put, remove, seedDefaults } from "./db.js";
-import { chineseNumber, cloneEvidenceSettings, downloadBlob, escapeHtml, inputToIso, localInputValue, nowIso, rocDateTime, sha256, toast, uuid } from "./utils.js";
+import { adjacentEvidenceStep, chineseNumber, cloneEvidenceSettings, downloadBlob, escapeHtml, evidenceLocationDefaults, inputToIso, localInputValue, nowIso, rocDateTime, sha256, toast, uuid } from "./utils.js";
 import { documentHash, generateDocument, photoCaption, wrapDocument } from "./documents.js";
 import { collectCase, exportAllBackup, exportCase } from "./exporter.js";
 import { DEFAULT_SUMMARY_TEMPLATE, renderSummary, SUMMARY_FIELDS, summaryValues, unknownSummaryFields } from "./summary.js";
@@ -11,6 +11,7 @@ const state = { page: "首頁", caseId: "", evidenceId: "", step: 1, documentTyp
 const documentTypes = ["搜索扣押筆錄", "毒品初步檢驗紀錄表", "證物照片紀錄", "扣押物品目錄表"];
 const statuses = ["草稿", "採證中", "已完成", "待簽署", "已簽署", "已作廢"];
 const CASE_DRAFT_KEY = "證跡_新增案件草稿";
+const LAST_BACKUP_KEY = "證跡_最後完整備份";
 const evidenceCategories = ["毒品", "毒品施用器具", "電子磅秤", "手機", "現金", "包裝材料", "其他"];
 
 function shell(content, title = "證跡") {
@@ -81,11 +82,16 @@ async function renderHome() {
   const counts = Object.fromEntries(statuses.map(status => [status, cases.filter(item => item.status === status).length]));
   const recent = cases.find(item => !["已簽署", "已作廢"].includes(item.status)) || cases[0];
   const savedDraft = localStorage.getItem(CASE_DRAFT_KEY);
+  const lastBackup = localStorage.getItem(LAST_BACKUP_KEY);
   shell(`<section class="home-overview"><div><p class="eyebrow">完全本地端・可離線使用</p><h1>現場案件工作台</h1><p>資料只保存在此裝置。</p></div>
     <button class="primary large" data-go="新增案件">＋ 新增案件</button></section>
     ${recent ? `<button class="continue-case" data-go="案件詳情" data-id="${recent.id}">
       <span><small>繼續上次案件</small><strong>${escapeHtml(recent.name || "未命名案件")}</strong><em>${escapeHtml(recent.status)}｜${rocDateTime(recent.updatedAt)}</em></span><b>繼續 →</b>
     </button>` : savedDraft ? `<button class="continue-case" data-go="新增案件"><span><small>尚有未完成草稿</small><strong>繼續填寫新案件</strong></span><b>繼續 →</b></button>` : ""}
+    <section class="local-save-status" aria-label="本機資料狀態">
+      <span><b>✓</b><span><strong>資料儲存於本機</strong><small>${recent ? `最近更新 ${rocDateTime(recent.updatedAt)}` : "尚無案件資料"}</small></span></span>
+      <span><b class="${lastBackup ? "" : "warning"}">${lastBackup ? "✓" : "!"}</b><span><strong>${lastBackup ? "已有完整備份" : "尚未完整備份"}</strong><small>${lastBackup ? rocDateTime(lastBackup) : "建議執勤後匯出備份"}</small></span></span>
+    </section>
     <section class="status-grid compact">
       ${["採證中", "已完成", "待簽署", "已簽署"].map(status => `<button class="status-card" data-go="案件列表"><strong>${counts[status]}</strong><span>${status}案件</span></button>`).join("")}
     </section>
@@ -350,6 +356,9 @@ async function renderCaseDetail() {
   if (!caseData) return navigate("案件列表");
   const bundle = await collectCase(caseData.id);
   const completion = bundle.evidence.length ? Math.round(bundle.evidence.filter(item => item.status === "採證完成").length / bundle.evidence.length * 100) : 0;
+  const outstanding = bundle.evidence.flatMap(item =>
+    validateEvidence(item, bundle.photos.filter(photo => photo.evidenceId === item.id)).map(issue => ({ evidence: item, issue }))
+  );
   shell(`<section class="case-summary panel"><div><span class="badge ${statusClass(caseData.status)}">${caseData.status}</span><h2>${escapeHtml(caseData.name)}</h2>
     <p>${escapeHtml(caseData.reason)}</p><p>${escapeHtml(caseData.address)}</p></div>
     <div class="progress-ring"><strong>${completion}%</strong><span>採證完成度</span></div></section>
@@ -365,6 +374,8 @@ async function renderCaseDetail() {
     </section>
     <section class="action-row"><button id="edit-case">修改案件資料</button><button class="primary" id="add-evidence">新增證物</button>
       <button data-go="案件摘要">產生案件摘要</button><button data-go="文件中心">產生文件</button><button id="export-case">匯出完整案件</button></section>
+    ${outstanding.length ? `<section class="case-issues panel"><div><span class="badge danger">尚缺 ${outstanding.length} 項</span><div><strong>案件完成前仍有資料需要補齊</strong><small>${escapeHtml(outstanding.slice(0, 3).map(item => `${item.evidence.number} ${item.issue}`).join("、"))}${outstanding.length > 3 ? "…" : ""}</small></div></div>
+      <button type="button" data-go="證物採證" data-id="${outstanding[0].evidence.id}">前往第一個缺漏</button></section>` : bundle.evidence.length ? `<section class="case-issues complete panel"><div><span class="badge done">檢查完成</span><div><strong>所有證物必填資料已齊全</strong><small>可繼續產生文件或結束搜索。</small></div></div></section>` : ""}
     <section><div class="section-title"><h2>證物卡片</h2><span>${bundle.evidence.length} 件</span></div>
     <div class="evidence-list">${await evidenceCards(bundle.evidence)}</div></section>
     <section class="danger-zone"><h2>案件管理</h2><button id="lock-case">鎖定案件</button><button class="danger-button" id="delete-case">刪除案件</button></section>`, "案件詳情");
@@ -409,7 +420,11 @@ async function renderCaseDetail() {
     renderCaseDetail();
   });
   document.querySelector("#export-case").onclick = async () => {
-    try { await exportCase(caseData, bundle.evidence, bundle.photos, bundle.documents, bundle.signatures); toast("完整案件壓縮檔已產生。"); }
+    try {
+      await exportCase(caseData, bundle.evidence, bundle.photos, bundle.documents, bundle.signatures);
+      localStorage.setItem(LAST_BACKUP_KEY, nowIso());
+      toast("完整案件壓縮檔已產生，備份時間已記錄。");
+    }
     catch (error) { toast(error.message, "錯誤"); }
   };
   document.querySelector("#lock-case").onclick = async () => {
@@ -488,12 +503,35 @@ function bindEvidenceSwipe(items) {
     button.onclick = async event => {
       event.stopPropagation();
       const evidence = items.find(item => item.id === button.dataset.deleteEvidence);
-      if (!evidence || !confirm(`確定刪除「${evidence.number} ${evidence.name}」？相關照片也會一併刪除且無法復原。`)) return;
+      if (!evidence || !confirm(`確定刪除「${evidence.number} ${evidence.name}」？相關照片會一併刪除，完成後可在七秒內復原。`)) return;
+      const deletedPhotos = (await byCase("photos", evidence.caseId)).filter(item => item.evidenceId === evidence.id);
       await deleteEvidenceData(evidence.id, evidence.caseId);
-      toast(`${evidence.number} 已刪除。`);
       await renderCaseDetail();
+      showEvidenceUndo(evidence, deletedPhotos);
     };
   });
+}
+
+function showEvidenceUndo(evidence, photos) {
+  document.querySelector(".toast")?.remove();
+  const element = document.createElement("div");
+  element.className = "toast undo-toast";
+  element.setAttribute("role", "status");
+  element.innerHTML = `<span>${escapeHtml(evidence.number)} 已刪除</span><button type="button">復原</button>`;
+  document.body.append(element);
+  const timer = setTimeout(() => element.remove(), 7000);
+  element.querySelector("button").onclick = async () => {
+    clearTimeout(timer);
+    await put("evidence", evidence, false);
+    for (const photo of photos) await put("photos", photo, false);
+    await put("audit", {
+      id: uuid(), caseId: evidence.caseId, action: "復原刪除證物", entity: "evidence",
+      entityId: evidence.id, restoredPhotoCount: photos.length, at: nowIso()
+    }, false);
+    element.remove();
+    toast(`${evidence.number} 已復原。`);
+    await renderCaseDetail();
+  };
 }
 
 async function createEvidence(caseData, current, selectedCategory = "") {
@@ -504,11 +542,14 @@ async function createEvidence(caseData, current, selectedCategory = "") {
   const prefix = localStorage.getItem("證物編號格式") || "證";
   const defaultName = evidenceCategory === "毒品" ? "疑似毒品" : evidenceCategory === "其他" ? "其他證物" : evidenceCategory;
   const defaultUnit = ({ "毒品": "包", "毒品施用器具": "組", "電子磅秤": "台", "手機": "支", "現金": "張", "包裝材料": "批", "其他": "件" })[evidenceCategory] || "件";
+  const locationDefaults = evidenceLocationDefaults(current);
   const item = {
     id: uuid(), caseId: caseData.id, sequence, number: `${prefix}${chineseNumber(sequence)}`, evidenceCategory, name: defaultName,
     drugType: "", appearance: "", color: "", packaging: "", quantity: "", quantityUnit: defaultUnit,
-    grossWeight: "", packageWeight: "", netWeight: "", weightUnit: "公克", foundAddress: caseData.address,
-    space: "", exactLocation: "", positionExtra: "", locationText: "", foundAt: "", foundOriginalAt: "", foundTimeSource: "",
+    grossWeight: "", packageWeight: "", netWeight: "", weightUnit: "公克", foundAddress: locationDefaults.foundAddress || caseData.address,
+    space: locationDefaults.space || "", exactLocation: locationDefaults.exactLocation || "",
+    positionExtra: locationDefaults.positionExtra || "", locationText: locationDefaults.locationText || "",
+    foundAt: "", foundOriginalAt: "", foundTimeSource: "",
     reagent: "", testResult: "", reaction: "",
     brand: "", model: "", imei: "", phoneNumber: "", scaleResidue: "",
     utensilType: "", material: "", residue: "", denomination: "", billCount: "", cashTotal: "", categoryNote: "",
@@ -516,6 +557,7 @@ async function createEvidence(caseData, current, selectedCategory = "") {
   };
   await put("evidence", item);
   state.evidenceId = item.id; state.step = 1;
+  if (locationDefaults.locationText) toast("已沿用上一件證物的發現位置，可直接修改。");
   navigate("證物採證", item.id);
 }
 
@@ -550,8 +592,9 @@ async function renderEvidenceWizard() {
   const photos = (await byCase("photos", evidence.caseId)).filter(item => item.evidenceId === evidence.id);
   const isDrug = (evidence.evidenceCategory || "毒品") === "毒品";
   const stepNames = ["發現位置", "證物資料", isDrug ? "秤重" : "重量選填", isDrug ? "毒品初驗" : "初驗選填", "完整檢查"];
+  const visibleSteps = isDrug ? [1, 2, 3, 4, 5] : [1, 2, 5];
   shell(`<section class="wizard-head"><div><span class="evidence-number">${escapeHtml(evidence.number)}</span><h2>${escapeHtml(evidence.name)}</h2></div>
-    <div class="stepper">${stepNames.map((name, index) => `<button class="${state.step === index + 1 ? "current" : state.step > index + 1 ? "complete" : ""}" data-step="${index + 1}"><span>${index + 1}</span><small>${name}</small></button>`).join("")}</div></section>
+    <div class="stepper ${isDrug ? "" : "three-steps"}">${visibleSteps.map(step => `<button class="${state.step === step ? "current" : state.step > step ? "complete" : ""}" data-step="${step}"><span>${step === 5 && !isDrug ? 3 : step}</span><small>${stepNames[step - 1]}</small></button>`).join("")}</div></section>
     <section id="wizard-content" class="panel">${await wizardStep(state.step, evidence, photos, caseData)}</section>
     <nav class="wizard-nav"><button type="button" id="previous-step" ${state.step === 1 ? "disabled" : ""}>上一步</button><button type="button" id="save-step">儲存</button>
       <button type="button" class="primary" id="next-step">${state.step === 5 ? "返回案件" : "確認並下一步"}</button></nav>`, "證物採證");
@@ -660,7 +703,7 @@ function bindWizard(evidence, photos, caseData) {
     const saved = await saveWizard(evidence);
     if (!saved) throw new Error("請先修正目前資料。");
     const previousStep = state.step;
-    state.step -= 1;
+    state.step = adjacentEvidenceStep(state.step, evidence.evidenceCategory || "毒品", -1);
     try { await renderEvidenceWizard(); }
     catch (error) { state.step = previousStep; throw error; }
   });
@@ -679,7 +722,7 @@ function bindWizard(evidence, photos, caseData) {
       if (!saved) throw new Error("請先修正目前資料。");
       if (state.step === 5) return navigate("案件詳情", evidence.caseId);
       const previousStep = state.step;
-      state.step += 1;
+      state.step = adjacentEvidenceStep(state.step, evidence.evidenceCategory || "毒品", 1);
       try { await renderEvidenceWizard(); }
       catch (error) { state.step = previousStep; throw error; }
     });
@@ -1101,10 +1144,12 @@ function clearSignature(canvas) { canvas.getContext("2d").clearRect(0, 0, canvas
 
 async function renderDataManager() {
   const caseCount = (await getAll("cases")).length;
+  const lastBackup = localStorage.getItem(LAST_BACKUP_KEY);
   shell(`<section class="menu-grid data-menu"><button id="backup-all"><strong>匯出全部案件備份</strong><small>包含案件、照片、文件、簽名及設定</small></button>
     <label class="file-card"><strong>還原全部案件</strong><small>匯入證跡備份檔；可選擇合併或取代</small><input id="restore-all" type="file" accept=".json,application/json"></label>
     <label class="file-card"><strong>匯入單一案件備份</strong><small>重複案件識別碼將停止匯入</small><input id="restore-case" type="file" accept=".json,application/json"></label>
     <button id="export-options"><strong>匯出預設選項</strong><small>另存常用選項、人員及地址</small></button></section>
+    <section class="panel backup-status"><span class="badge ${lastBackup ? "done" : "warning"}">${lastBackup ? "已備份" : "待備份"}</span><div><h2>${lastBackup ? "完整備份已有紀錄" : "尚未建立完整備份"}</h2><p>${lastBackup ? `上次完整備份：${rocDateTime(lastBackup)}` : "建議執勤後匯出全部案件備份，並保存於受控裝置。"}</p></div></section>
     <section class="panel"><h2>安全提醒</h2><p>備份檔可能包含個人資料、照片與簽名。請存放於受控裝置，不要傳送到未經授權的雲端服務。</p></section>
     <section class="panel app-maintenance"><div><h2>系統維護</h2><p>重新整理不會刪除資料；清除暫存只會移除證跡的離線網頁快取，不會清除案件、照片、文件、簽名或常用設定。</p></div>
       <div class="maintenance-actions"><button id="reload-app">重新整理系統</button><button id="clear-app-cache">清除暫存並重新整理</button></div></section>
@@ -1113,7 +1158,12 @@ async function renderDataManager() {
     <section class="panel version-history"><div class="section-title"><h2>更新紀錄</h2><span class="badge active">v${APP_VERSION}</span></div>
       ${CHANGELOG.map(release => `<details ${release.version === APP_VERSION ? "open" : ""}><summary>v${release.version}｜${release.date}</summary><ul>${release.changes.map(change => `<li>${escapeHtml(change)}</li>`).join("")}</ul></details>`).join("")}
     </section>`, "備份與還原");
-  document.querySelector("#backup-all").onclick = exportAllBackup;
+  document.querySelector("#backup-all").onclick = async () => {
+    await exportAllBackup();
+    localStorage.setItem(LAST_BACKUP_KEY, nowIso());
+    toast("完整備份已匯出，時間已記錄。");
+    await renderDataManager();
+  };
   document.querySelector("#restore-all").onchange = async event => restoreFile(event.target.files[0], true);
   document.querySelector("#restore-case").onchange = async event => restoreFile(event.target.files[0], false);
   document.querySelector("#export-options").onclick = async () => {
