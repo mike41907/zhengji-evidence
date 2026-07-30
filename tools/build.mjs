@@ -2,7 +2,7 @@ import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 const output = "dist";
 await rm(output, { recursive:true, force:true });
 await mkdir(output, { recursive:true });
-for (const path of ["index.html","manifest.webmanifest","service-worker.js","icons","src","vendor","docs","README.md"]) await cp(path, `${output}/${path}`, { recursive:true });
+for (const path of ["index.html","manifest.webmanifest","service-worker.js","icons","src","vendor","docs","README.md","CHANGELOG.md"]) await cp(path, `${output}/${path}`, { recursive:true });
 await mkdir(`${output}/server`, { recursive:true });
 const publicFiles = {
   "/index.html": ["index.html", "text/html; charset=utf-8"],
@@ -16,6 +16,7 @@ const publicFiles = {
   "/src/exporter.js": ["src/exporter.js", "text/javascript; charset=utf-8"],
   "/src/summary.js": ["src/summary.js", "text/javascript; charset=utf-8"],
   "/src/address.js": ["src/address.js", "text/javascript; charset=utf-8"],
+  "/src/version.js": ["src/version.js", "text/javascript; charset=utf-8"],
   "/vendor/jszip.min.js": ["vendor/jszip.min.js", "text/javascript; charset=utf-8"],
   "/icons/icon.svg": ["icons/icon.svg", "image/svg+xml"],
   "/icons/icon-192.png": ["icons/icon-192.png", "image/png"],

@@ -4,6 +4,7 @@ import { documentHash, generateDocument, photoCaption, wrapDocument } from "./do
 import { collectCase, exportAllBackup, exportCase } from "./exporter.js";
 import { DEFAULT_SUMMARY_TEMPLATE, renderSummary, SUMMARY_FIELDS, summaryValues, unknownSummaryFields } from "./summary.js";
 import { ADDRESS_DATA, CITIES, composeAddress } from "./address.js";
+import { APP_VERSION, CHANGELOG } from "./version.js";
 
 const app = document.querySelector("#app");
 const state = { page: "首頁", caseId: "", evidenceId: "", step: 1, documentType: "搜索扣押筆錄", previewRead: false };
@@ -14,7 +15,7 @@ function shell(content, title = "證跡") {
   app.innerHTML = `<header class="topbar"><button class="brand" data-go="首頁"><span>證跡</span><small>證物採證與文件產製系統</small></button>
     <div><span class="offline" id="network-status">${navigator.onLine ? "本機運作中" : "離線運作中"}</span></div></header>
     <main><div class="page-heading">${state.page !== "首頁" ? '<button class="back" data-back>返回</button>' : ""}<h1>${escapeHtml(title)}</h1></div>${content}</main>
-    <footer class="app-footer">證跡第一版｜資料只保存在此裝置</footer>
+    <footer class="app-footer">證跡 v${APP_VERSION}｜資料只保存在此裝置</footer>
     <nav class="mobile-tabbar" aria-label="主要功能">
       <button data-go="首頁" class="${state.page === "首頁" ? "active" : ""}"><span>⌂</span>首頁</button>
       <button data-go="案件列表" class="${["案件列表", "案件詳情", "案件摘要"].includes(state.page) ? "active" : ""}"><span>▤</span>案件</button>
@@ -327,7 +328,7 @@ async function createEvidence(caseData, current) {
     drugType: "", appearance: "", color: "", packaging: "", quantity: "", quantityUnit: "包",
     grossWeight: "", packageWeight: "", netWeight: "", weightUnit: "公克", foundAddress: caseData.address,
     space: "", exactLocation: "", positionExtra: "", locationText: "", foundAt: "", foundOriginalAt: "", foundTimeSource: "",
-    weighedAt: "", weighedOriginalAt: "", weighedTimeSource: "", reagent: "", testResult: "", reaction: "",
+    reagent: "", testResult: "", reaction: "",
     testAt: "", testOriginalAt: "", testTimeSource: "", notes: "", status: "採證中", createdAt: nowIso(), updatedAt: nowIso()
   };
   await put("evidence", item);
@@ -362,7 +363,7 @@ async function wizardStep(step, evidence, photos, caseData) {
   if (step === 3) return `<div class="form-grid"><label>毛重<em>必填</em><input type="number" inputmode="decimal" min="0" step="0.01" name="grossWeight" value="${escapeHtml(evidence.grossWeight)}"></label>
     <label>包裝重量<input type="number" inputmode="decimal" min="0" step="0.01" name="packageWeight" value="${escapeHtml(evidence.packageWeight)}"></label>
     <label>淨重<input name="netWeight" value="${escapeHtml(evidence.netWeight)}" readonly></label>${await optionSelect("重量單位", "weightUnit", evidence.weightUnit)}</div>
-    ${photoStep("秤重照片", photos, evidence, "weighedAt", "秤重時間")}`;
+    ${photoStep("秤重照片", photos)}`;
   if (step === 4) return `<div class="form-grid">${await optionSelect("初驗試劑", "reagent", evidence.reagent)}${await optionSelect("初驗結果", "testResult", evidence.testResult)}
     <label class="wide">反應情形<textarea name="reaction">${escapeHtml(evidence.reaction)}</textarea></label></div>${photoStep("初驗照片", photos, evidence, "testAt", "初驗時間")}`;
   const issues = validateEvidence(evidence, photos);
@@ -381,12 +382,11 @@ function photoStep(type, photos, evidence, timeKey, label) {
   const photo = photos.find(item => item.type === type);
   const source = photo && (photo.preview || photo.original);
   const sourceUrl = source instanceof Blob ? URL.createObjectURL(source) : source;
-  const sourceKey = timeKey.replace("At", "TimeSource");
   return `<section class="photo-capture"><h2>${type}</h2>${photo ? `<div class="photo-preview"><img src="${sourceUrl}" alt="${type}">
     <div><strong>${escapeHtml(photo.fileName)}</strong><span>${Math.round(photo.size / 1024)} 千位元組</span><span>摘要：${photo.hash.slice(0, 16)}…</span></div></div>` : `<div class="camera-placeholder">尚未拍攝</div>`}
     <label class="camera-button">拍攝或選取照片<input type="file" accept="image/*" capture="environment" data-photo-type="${type}"></label>
-    <div class="time-card"><strong>${label}</strong><span>${rocDateTime(evidence[timeKey])}</span><small>時間來源：${escapeHtml(evidence[sourceKey] || "尚未取得")}</small>
-    <div class="time-actions"><button type="button" data-time-now="${timeKey}">使用現在時間</button><button type="button" data-time-edit="${timeKey}">手動修改</button><button type="button" data-time-clear="${timeKey}">清除時間</button></div></div></section>`;
+    ${timeKey ? `<div class="time-card"><strong>${label}</strong><span>${rocDateTime(evidence[timeKey])}</span><small>時間來源：${escapeHtml(evidence[timeKey.replace("At", "TimeSource")] || "尚未取得")}</small>
+    <div class="time-actions"><button type="button" data-time-now="${timeKey}">使用現在時間</button><button type="button" data-time-edit="${timeKey}">手動修改</button><button type="button" data-time-clear="${timeKey}">清除時間</button></div></div>` : ""}</section>`;
 }
 
 function bindWizard(evidence, photos, caseData) {
@@ -470,10 +470,11 @@ async function addPhoto(file, type, evidence, existing) {
   };
   photo.caption = photo.caption || photoCaption(evidence, type, photo.order);
   await put("photos", photo);
-  const map = { "發現位置照片": "foundAt", "秤重照片": "weighedAt", "初驗照片": "testAt" };
-  const key = map[type], sourceKey = key.replace("At", "TimeSource"), originalKey = key.replace("At", "OriginalAt");
-  await put("evidence", { ...evidence, [key]: finalAt, [originalKey]: finalAt, [sourceKey]: timeSource, updatedAt: nowIso() });
-  toast("照片已保存，並依照片時間自動帶入。"); renderEvidenceWizard();
+  const map = { "發現位置照片": "foundAt", "初驗照片": "testAt" };
+  const key = map[type];
+  const timeFields = key ? { [key]: finalAt, [key.replace("At", "OriginalAt")]: finalAt, [key.replace("At", "TimeSource")]: timeSource } : {};
+  await put("evidence", { ...evidence, ...timeFields, updatedAt: nowIso() });
+  toast(key ? "照片已保存，並依照片時間自動帶入。" : "秤重照片已保存。"); renderEvidenceWizard();
 }
 
 function makePreview(file) {
@@ -581,10 +582,10 @@ async function renderDocuments() {
   const caseData = await get("cases", state.caseId);
   const { evidence, photos, documents } = await collectCase(state.caseId);
   const content = generateDocument(state.documentType, caseData, evidence, photos);
-  shell(`<section class="document-toolbar">${documentTypes.map(type => `<button data-document="${type}" class="${type === state.documentType ? "active" : ""}">${type}</button>`).join("")}</section>
+  shell(`<label class="document-picker">文件種類<select id="document-type">${documentTypes.map(type => `<option ${type === state.documentType ? "selected" : ""}>${type}</option>`).join("")}</select></label>
     <section class="document-actions"><button id="regenerate">重新產生</button><button id="editable-export">匯出可修改文件</button><button id="fixed-export">匯出固定版面文件</button><button class="primary" data-go="簽署">進入簽署流程</button></section>
     <section class="document-preview">${content}</section>`, "文件中心");
-  document.querySelectorAll("[data-document]").forEach(button => button.onclick = () => { state.documentType = button.dataset.document; renderDocuments(); });
+  document.querySelector("#document-type").onchange = event => { state.documentType = event.target.value; renderDocuments(); };
   document.querySelector("#regenerate").onclick = async () => {
     const html = wrapDocument(content); const hash = await documentHash(html);
     const current = documents.filter(item => item.type === state.documentType);
@@ -659,7 +660,10 @@ async function renderDataManager() {
     <label class="file-card"><strong>還原全部案件</strong><small>匯入證跡備份檔；可選擇合併或取代</small><input id="restore-all" type="file" accept=".json,application/json"></label>
     <label class="file-card"><strong>匯入單一案件備份</strong><small>重複案件識別碼將停止匯入</small><input id="restore-case" type="file" accept=".json,application/json"></label>
     <button id="export-options"><strong>匯出預設選項</strong><small>另存常用選項、人員及地址</small></button></section>
-    <section class="panel"><h2>安全提醒</h2><p>備份檔可能包含個人資料、照片與簽名。請存放於受控裝置，不要傳送到未經授權的雲端服務。</p></section>`, "備份與還原");
+    <section class="panel"><h2>安全提醒</h2><p>備份檔可能包含個人資料、照片與簽名。請存放於受控裝置，不要傳送到未經授權的雲端服務。</p></section>
+    <section class="panel version-history"><div class="section-title"><h2>更新紀錄</h2><span class="badge active">v${APP_VERSION}</span></div>
+      ${CHANGELOG.map(release => `<details ${release.version === APP_VERSION ? "open" : ""}><summary>v${release.version}｜${release.date}</summary><ul>${release.changes.map(change => `<li>${escapeHtml(change)}</li>`).join("")}</ul></details>`).join("")}
+    </section>`, "備份與還原");
   document.querySelector("#backup-all").onclick = exportAllBackup;
   document.querySelector("#restore-all").onchange = async event => restoreFile(event.target.files[0], true);
   document.querySelector("#restore-case").onchange = async event => restoreFile(event.target.files[0], false);
