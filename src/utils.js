@@ -102,6 +102,28 @@ export function cloneEvidenceSettings(source, { id, caseId, sequence, number, ti
   };
 }
 
+export function evidenceLocationDefaults(items = []) {
+  const latest = [...items].sort((a, b) =>
+    (b.sequence || 0) - (a.sequence || 0) ||
+    String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""))
+  )[0];
+  if (!latest) return {};
+  return {
+    foundAddress: latest.foundAddress || "",
+    space: latest.space || "",
+    exactLocation: latest.exactLocation || "",
+    positionExtra: latest.positionExtra || "",
+    locationText: latest.locationText || ""
+  };
+}
+
+export function adjacentEvidenceStep(current, category, direction = 1) {
+  const steps = category === "毒品" ? [1, 2, 3, 4, 5] : [1, 2, 5];
+  const index = steps.indexOf(Number(current));
+  if (index < 0) return steps[0];
+  return steps[Math.min(steps.length - 1, Math.max(0, index + direction))];
+}
+
 export function toast(message, type = "成功") {
   const old = document.querySelector(".toast");
   old?.remove();
