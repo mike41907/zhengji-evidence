@@ -7,10 +7,7 @@ export function photoCaption(evidence, type, index = 1) {
   const number = evidence.number || "未編號";
   if (type === "發現位置照片") return `圖${index}：證物編號${number}於上址${evidence.locationText || "未填位置"}發現時之情形。`;
   if (type === "秤重照片") {
-    const base = `圖${index}：證物編號${number}之${evidence.name || "證物"}${evidence.quantity || ""}${evidence.quantityUnit || ""}，經電子磅秤秤得毛重${evidence.grossWeight || "未填"}${evidence.weightUnit || "公克"}`;
-    return evidence.packageWeight !== "" && evidence.packageWeight != null
-      ? `${base}，扣除包裝重量${evidence.packageWeight}${evidence.weightUnit || "公克"}後，淨重${evidence.netWeight}${evidence.weightUnit || "公克"}。`
-      : `${base}。`;
+    return `圖${index}：證物編號${number}之${evidence.name || "證物"}${evidence.quantity || ""}${evidence.quantityUnit || ""}，連同包裝經電子磅秤秤得毛重${evidence.grossWeight || "未填"}${evidence.weightUnit || "公克"}。`;
   }
   if (type === "初驗照片") return `圖${index}：證物編號${number}經${evidence.reagent || "未填試劑"}檢驗，${evidence.testResult || "結果未填"}。`;
   return `圖${index}：證物編號${number}之其他採證照片。`;
@@ -33,8 +30,7 @@ export function generateDocument(type, caseData, evidenceList, photos, options =
       ["查獲日期時間", rocDateTime(item.foundAt)], ["查獲地點", `${caseData.address || ""}${item.locationText || ""}`],
       ["證物編號", item.number], ["證物名稱", item.name], ["外觀", item.appearance], ["顏色", item.color],
       ["包裝方式", item.packaging], ["數量", `${item.quantity || ""}${item.quantityUnit || ""}`],
-      ["毛重", `${item.grossWeight || ""}${item.weightUnit || ""}`], ["包裝重量", `${item.packageWeight || ""}${item.weightUnit || ""}`],
-      ["淨重", `${item.netWeight || ""}${item.weightUnit || ""}`], ["初驗試劑", item.reagent],
+      ["毛重（含包裝）", `${item.grossWeight || ""}${item.weightUnit || ""}`], ["初驗試劑", item.reagent],
       ["初驗結果", item.testResult], ["反應情形", item.reaction],
       ["初驗時間", rocDateTime(item.testAt)], ["初驗人員", caseData.tester]
     ]) + signatureArea(options)).join('<div class="page-break"></div>') || heading(type, caseData, draft) + "<p>本案件尚無毒品類證物。</p>";
@@ -56,11 +52,11 @@ export function generateDocument(type, caseData, evidenceList, photos, options =
 }
 
 function evidenceTable(items) {
-  return `<table><thead><tr><th>項次</th><th>證物編號</th><th>品名</th><th>外觀</th><th>顏色</th><th>包裝</th><th>數量</th><th>毛重</th><th>淨重</th><th>初驗結果</th></tr></thead><tbody>
+  return `<table><thead><tr><th>項次</th><th>證物編號</th><th>品名</th><th>外觀</th><th>顏色</th><th>包裝</th><th>數量</th><th>毛重（含包裝）</th><th>初驗結果</th></tr></thead><tbody>
     ${items.map((item, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(item.number)}</td><td>${escapeHtml(item.name || item.evidenceCategory)}</td>
     <td>${escapeHtml(item.appearance)}</td><td>${escapeHtml(item.color)}</td><td>${escapeHtml(item.packaging)}</td>
     <td>${escapeHtml(`${item.quantity || ""}${item.quantityUnit || ""}`)}</td><td>${escapeHtml(`${item.grossWeight || ""}${item.weightUnit || ""}`)}</td>
-    <td>${escapeHtml(`${item.netWeight || ""}${item.weightUnit || ""}`)}</td><td>${escapeHtml(item.testResult)}</td></tr>`).join("")}</tbody></table>`;
+    <td>${escapeHtml(item.testResult)}</td></tr>`).join("")}</tbody></table>`;
 }
 
 const mark = checked => checked ? "☑" : "☐";
