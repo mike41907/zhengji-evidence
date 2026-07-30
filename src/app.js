@@ -3,6 +3,7 @@ import { calculateNet, chineseNumber, downloadBlob, escapeHtml, inputToIso, loca
 import { documentHash, generateDocument, photoCaption, wrapDocument } from "./documents.js";
 import { collectCase, exportAllBackup, exportCase } from "./exporter.js";
 import { DEFAULT_SUMMARY_TEMPLATE, renderSummary, SUMMARY_FIELDS, summaryValues, unknownSummaryFields } from "./summary.js";
+import { ADDRESS_DATA, CITIES, composeAddress } from "./address.js";
 
 const app = document.querySelector("#app");
 const state = { page: "首頁", caseId: "", evidenceId: "", step: 1, documentType: "搜索扣押筆錄", previewRead: false };
@@ -63,12 +64,12 @@ async function render() {
 async function renderHome() {
   const cases = await getAll("cases");
   const counts = Object.fromEntries(statuses.map(status => [status, cases.filter(item => item.status === status).length]));
-  shell(`<section class="hero"><p class="eyebrow">完全本地端・可離線使用</p><h1>現場採證，循序完成</h1><p>案件、照片、簽名與文件不會上傳。</p>
-    <button class="primary large" data-go="新增案件">新增案件</button></section>
-    <section class="status-grid">
+  shell(`<section class="home-overview"><div><p class="eyebrow">完全本地端・可離線使用</p><h1>證物採證與文件產製</h1><p>案件、照片與簽名只保存在此裝置。</p></div>
+    <button class="primary large" data-go="新增案件">＋ 新增案件</button></section>
+    <section class="status-grid compact">
       ${["採證中", "已完成", "待簽署", "已簽署"].map(status => `<button class="status-card" data-go="案件列表"><strong>${counts[status]}</strong><span>${status}案件</span></button>`).join("")}
     </section>
-    <section class="menu-grid">
+    <section class="menu-grid compact-menu">
       <button data-go="案件列表"><span class="menu-icon">案</span><strong>全部案件</strong><small>搜尋、篩選與繼續採證</small></button>
       <button data-go="選項管理"><span class="menu-icon">選</span><strong>預設選項管理</strong><small>常用選項、人員與地址</small></button>
       <button data-go="資料管理"><span class="menu-icon">備</span><strong>備份與還原</strong><small>匯入、匯出與完整備份</small></button>
@@ -84,13 +85,13 @@ async function renderHome() {
 
 async function renderCaseList() {
   const cases = (await getAll("cases")).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  shell(`<section class="toolbar"><input id="case-search" type="search" placeholder="搜尋案號、案件名稱或嫌疑人"><select id="case-filter">
+  shell(`<section class="toolbar"><input id="case-search" type="search" placeholder="搜尋案件名稱或犯罪嫌疑人"><select id="case-filter">
     <option value="">全部狀態</option>${statuses.map(item => `<option>${item}</option>`).join("")}</select><button class="primary" data-go="新增案件">新增案件</button></section>
     <section id="case-list" class="case-list">${await caseCards(cases)}</section>`, "案件列表");
   const refresh = async () => {
     const term = document.querySelector("#case-search").value.trim();
     const filter = document.querySelector("#case-filter").value;
-    const filtered = cases.filter(item => (!term || `${item.caseNumber}${item.name}${item.suspect}`.includes(term)) && (!filter || item.status === filter));
+    const filtered = cases.filter(item => (!term || `${item.name}${item.suspect}`.includes(term)) && (!filter || item.status === filter));
     document.querySelector("#case-list").innerHTML = await caseCards(filtered);
     bindGlobal();
   };
@@ -105,7 +106,7 @@ async function caseCards(cases) {
     const complete = evidence.filter(entry => entry.status === "採證完成").length;
     return `<button class="case-card" data-go="案件詳情" data-id="${item.id}">
       <div><span class="badge ${statusClass(item.status)}">${escapeHtml(item.status)}</span><h2>${escapeHtml(item.name || "未命名案件")}</h2>
-      <p>${escapeHtml(item.caseNumber || "案號未填")}｜${escapeHtml(item.suspect || "嫌疑人未填")}</p></div>
+      <p>${escapeHtml(item.suspect || "犯罪嫌疑人未填")}｜${escapeHtml(item.reason || "案由未填")}</p></div>
       <div class="case-meta"><span>建立：${rocDateTime(item.createdAt)}</span><span>證物：${evidence.length} 件</span><span>完成：${complete}/${evidence.length}</span></div></button>`;
   }))).join("");
 }
@@ -116,15 +117,17 @@ function statusClass(status) {
 
 async function renderCaseForm(existing) {
   const data = existing || {
-    id: uuid(), caseNumber: "", name: "", reason: "違反毒品危害防制條例", suspect: "", unit: "", address: "",
+    id: uuid(), name: "", reason: "違反毒品危害防制條例", suspect: "", unit: "", address: "",
+    addressCity: "臺北市", addressDistrict: "", addressRoad: "", addressCustomRoad: "",
+    addressSection: "", addressLane: "", addressAlley: "", addressNumber: "", addressFloor: "", addressRoom: "", addressLocationNote: "",
     executionDate: nowIso(), searchStart: "", searchEnd: "", officer: "", recorder: "", tester: "", executors: "",
     presentPeople: "", notes: "", status: "草稿", createdAt: nowIso(), updatedAt: nowIso(), lockedAt: ""
   };
   shell(`<form id="case-form" class="panel form-grid">
-    ${field("案號", "caseNumber", data.caseNumber, true)}${field("案件名稱", "name", data.name, true)}
+    ${field("案件名稱", "name", data.name, true)}
     ${selectField("案由", "reason", ["違反毒品危害防制條例", "持有毒品", "販賣毒品", "施用毒品", "其他"], data.reason)}
     ${field("犯罪嫌疑人姓名", "suspect", data.suspect, true)}${field("執行單位", "unit", data.unit, true)}
-    ${field("執行地址", "address", data.address, true, "完整門牌地址")}
+    ${addressFields(data)}
     ${dateField("搜索開始時間", "searchStart", data.searchStart)}${dateField("搜索結束時間", "searchEnd", data.searchEnd)}
     ${field("承辦人", "officer", data.officer)}${field("製作筆錄人員", "recorder", data.recorder)}
     ${field("初驗人員", "tester", data.tester)}${field("執行人員", "executors", data.executors)}
@@ -132,11 +135,12 @@ async function renderCaseForm(existing) {
     <label class="wide">備註<textarea name="notes" rows="3">${escapeHtml(data.notes)}</textarea></label>
     <div class="sticky-actions"><button type="button" data-back>取消</button><button class="primary" type="submit">儲存案件</button></div>
   </form>`, existing ? "修改案件資料" : "新增案件");
+  bindAddressBuilder(data);
   document.querySelector("#case-form").onsubmit = async event => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
-    if (!values.caseNumber.trim() || !values.name.trim() || !values.suspect.trim() || !values.unit.trim() || !values.address.trim()) {
-      return toast("請完成案號、案件名稱、犯罪嫌疑人、執行單位與執行地址。", "錯誤");
+    if (!values.name.trim() || !values.suspect.trim() || !values.unit.trim() || !values.address.trim()) {
+      return toast("請完成案件名稱、犯罪嫌疑人、執行單位與執行地址。", "錯誤");
     }
     const item = { ...data, ...values, searchStart: inputToIso(values.searchStart), searchEnd: inputToIso(values.searchEnd), updatedAt: nowIso() };
     await put("cases", item);
@@ -144,6 +148,58 @@ async function renderCaseForm(existing) {
     state.caseId = item.id;
     navigate("案件詳情", item.id);
   };
+}
+
+function addressFields(data) {
+  const city = data.addressCity || "";
+  const districts = ADDRESS_DATA[city]?.districts || [];
+  const roads = ADDRESS_DATA[city]?.roads || [];
+  return `<fieldset class="address-builder wide"><legend>執行地址</legend>
+    <div class="address-primary">
+      <label>縣市<em>必填</em><select name="addressCity" id="address-city"><option value="">請選擇</option>${CITIES.map(item => `<option ${item === city ? "selected" : ""}>${item}</option>`).join("")}</select></label>
+      <label>行政區<em>必填</em><select name="addressDistrict" id="address-district"><option value="">請選擇</option>${districts.map(item => `<option ${item === data.addressDistrict ? "selected" : ""}>${item}</option>`).join("")}</select></label>
+      <label>道路<em>必填</em><select name="addressRoad" id="address-road"><option value="">請選擇</option>${roads.map(item => `<option ${item === data.addressRoad ? "selected" : ""}>${item}</option>`).join("")}<option ${data.addressRoad === "其他道路" ? "selected" : ""}>其他道路</option></select></label>
+      <label id="custom-road-field" class="${data.addressRoad === "其他道路" ? "" : "hidden"}">自訂道路<input name="addressCustomRoad" value="${escapeHtml(data.addressCustomRoad || "")}" placeholder="輸入道路或街名"></label>
+    </div>
+    <div class="address-details">
+      ${addressPart("段", "addressSection", data.addressSection)}${addressPart("巷", "addressLane", data.addressLane)}
+      ${addressPart("弄", "addressAlley", data.addressAlley)}${addressPart("號", "addressNumber", data.addressNumber)}
+      ${addressPart("樓", "addressFloor", data.addressFloor)}${addressPart("室", "addressRoom", data.addressRoom)}
+    </div>
+    <label>無門牌地點或位置補充<input name="addressLocationNote" value="${escapeHtml(data.addressLocationNote || "")}" placeholder="例如河堤旁、停車場內"></label>
+    <label>完整地址<input name="address" id="complete-address" value="${escapeHtml(data.address || "")}" readonly required></label>
+  </fieldset>`;
+}
+
+function addressPart(label, name, value = "") {
+  return `<label>${label}<input type="text" inputmode="numeric" name="${name}" value="${escapeHtml(value)}"></label>`;
+}
+
+function bindAddressBuilder(data) {
+  const form = document.querySelector("#case-form");
+  const city = form.querySelector("#address-city");
+  const district = form.querySelector("#address-district");
+  const road = form.querySelector("#address-road");
+  const customRoadField = form.querySelector("#custom-road-field");
+  const rebuildSelects = () => {
+    const cityData = ADDRESS_DATA[city.value];
+    district.innerHTML = `<option value="">請選擇</option>${(cityData?.districts || []).map(item => `<option>${item}</option>`).join("")}`;
+    road.innerHTML = `<option value="">請選擇</option>${(cityData?.roads || []).map(item => `<option>${item}</option>`).join("")}<option>其他道路</option>`;
+  };
+  const updateAddress = () => {
+    customRoadField.classList.toggle("hidden", road.value !== "其他道路");
+    const formData = Object.fromEntries(new FormData(form));
+    form.querySelector("#complete-address").value = composeAddress({
+      city: formData.addressCity, district: formData.addressDistrict, road: formData.addressRoad,
+      customRoad: formData.addressCustomRoad, section: formData.addressSection, lane: formData.addressLane,
+      alley: formData.addressAlley, number: formData.addressNumber, floor: formData.addressFloor,
+      room: formData.addressRoom, locationNote: formData.addressLocationNote
+    }) || data.address || "";
+  };
+  city.onchange = () => { rebuildSelects(); updateAddress(); };
+  form.querySelectorAll(".address-builder input,.address-builder select").forEach(element => element.addEventListener("change", updateAddress));
+  form.querySelectorAll(".address-builder input").forEach(element => element.addEventListener("input", updateAddress));
+  updateAddress();
 }
 
 function field(label, name, value = "", required = false, placeholder = "") {
@@ -162,7 +218,7 @@ async function renderCaseDetail() {
   const bundle = await collectCase(caseData.id);
   const completion = bundle.evidence.length ? Math.round(bundle.evidence.filter(item => item.status === "採證完成").length / bundle.evidence.length * 100) : 0;
   shell(`<section class="case-summary panel"><div><span class="badge ${statusClass(caseData.status)}">${caseData.status}</span><h2>${escapeHtml(caseData.name)}</h2>
-    <p>${escapeHtml(caseData.caseNumber)}｜${escapeHtml(caseData.reason)}</p><p>${escapeHtml(caseData.address)}</p></div>
+    <p>${escapeHtml(caseData.reason)}</p><p>${escapeHtml(caseData.address)}</p></div>
     <div class="progress-ring"><strong>${completion}%</strong><span>採證完成度</span></div></section>
     <section class="action-row"><button id="edit-case">修改案件資料</button><button class="primary" id="add-evidence">新增證物</button>
       <button data-go="案件摘要">產生案件摘要</button><button data-go="文件中心">產生文件</button><button id="export-case">匯出完整案件</button></section>

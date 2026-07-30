@@ -39,7 +39,7 @@ export async function exportCase(caseData, evidence, photos, documents, signatur
     signedDocumentCount: documents.filter(item => item.status === "已簽署").length, files: manifest
   }, null, 2));
   const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
-  downloadBlob(blob, `${caseData.name}_${caseData.caseNumber}_${rocDate(nowIso())}.zip`);
+  downloadBlob(blob, `${caseData.name}_${rocDate(nowIso())}.zip`);
 }
 
 export async function exportAllBackup() {

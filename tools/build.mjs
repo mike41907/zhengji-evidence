@@ -15,6 +15,7 @@ const publicFiles = {
   "/src/documents.js": ["src/documents.js", "text/javascript; charset=utf-8"],
   "/src/exporter.js": ["src/exporter.js", "text/javascript; charset=utf-8"],
   "/src/summary.js": ["src/summary.js", "text/javascript; charset=utf-8"],
+  "/src/address.js": ["src/address.js", "text/javascript; charset=utf-8"],
   "/vendor/jszip.min.js": ["vendor/jszip.min.js", "text/javascript; charset=utf-8"],
   "/icons/icon.svg": ["icons/icon.svg", "image/svg+xml"],
   "/icons/icon-192.png": ["icons/icon-192.png", "image/png"],
