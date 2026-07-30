@@ -16,7 +16,7 @@ const evidenceCategories = ["毒品", "毒品施用器具", "電子磅秤", "手
 function shell(content, title = "證跡") {
   app.innerHTML = `<header class="topbar"><button class="brand" data-go="首頁"><span>證跡</span><small>證物採證與文件產製系統</small></button>
     <div><span class="offline" id="network-status">${navigator.onLine ? "本機運作中" : "離線運作中"}</span></div></header>
-    <main><div class="page-heading">${state.page !== "首頁" ? '<button class="back" data-back>返回</button>' : ""}<h1>${escapeHtml(title)}</h1></div>${content}</main>
+    <main class="app-main"><div class="page-heading">${state.page !== "首頁" ? '<button class="back" data-back>返回</button>' : ""}<h1>${escapeHtml(title)}</h1></div>${content}</main>
     <footer class="app-footer">證跡 v${APP_VERSION}｜資料只保存在此裝置</footer>
     <nav class="mobile-tabbar ${["證物採證", "簽署"].includes(state.page) ? "workflow-hidden" : ""}" aria-label="主要功能">
       <button data-go="首頁" class="${state.page === "首頁" ? "active" : ""}"><span>⌂</span>首頁</button>
@@ -30,6 +30,10 @@ function shell(content, title = "證跡") {
 function bindGlobal() {
   document.querySelectorAll("[data-go]").forEach(button => button.onclick = () => navigate(button.dataset.go, button.dataset.id));
   document.querySelector("[data-back]")?.addEventListener("click", () => history.back());
+  document.querySelectorAll("button,.file-card").forEach(element => {
+    element.addEventListener("pointerdown", () => element.classList.add("pressed"));
+    ["pointerup", "pointercancel", "pointerleave"].forEach(type => element.addEventListener(type, () => element.classList.remove("pressed")));
+  });
 }
 
 function navigate(page, id = "") {
@@ -37,7 +41,8 @@ function navigate(page, id = "") {
   if (page === "案件詳情") state.caseId = id || state.caseId;
   if (page === "證物採證") state.evidenceId = id || state.evidenceId;
   history.pushState({ page, id }, "", `#${encodeURIComponent(page)}${id ? `/${id}` : ""}`);
-  render();
+  if (document.startViewTransition) document.startViewTransition(() => render());
+  else render();
 }
 
 window.addEventListener("popstate", event => {
@@ -45,7 +50,8 @@ window.addEventListener("popstate", event => {
   state.page = saved.page;
   if (saved.page === "案件詳情") state.caseId = saved.id;
   if (saved.page === "證物採證") state.evidenceId = saved.id;
-  render();
+  if (document.startViewTransition) document.startViewTransition(() => render());
+  else render();
 });
 
 window.addEventListener("online", () => document.querySelector("#network-status") && (document.querySelector("#network-status").textContent = "本機運作中"));
@@ -205,8 +211,12 @@ async function renderCaseForm(existing) {
 }
 
 function bindCaseDraft(existing) {
-  if (existing) return;
   const form = document.querySelector("#case-form");
+  form.querySelectorAll("input,select,textarea").forEach(control => {
+    control.addEventListener("blur", () => control.classList.toggle("field-invalid", !control.checkValidity()));
+    control.addEventListener("input", () => control.classList.remove("field-invalid"));
+  });
+  if (existing) return;
   let timer;
   const saveDraft = () => {
     clearTimeout(timer);
@@ -798,21 +808,52 @@ async function renderDocuments() {
   const { evidence, photos, documents } = await collectCase(state.caseId);
   const content = generateDocument(state.documentType, caseData, evidence, photos);
   shell(`<label class="document-picker">文件種類<select id="document-type">${documentTypes.map(type => `<option ${type === state.documentType ? "selected" : ""}>${type}</option>`).join("")}</select></label>
-    <section class="document-actions"><button id="regenerate">重新產生</button><button id="editable-export">匯出可修改文件</button><button id="fixed-export">匯出固定版面文件</button><button class="primary" data-go="簽署">進入簽署流程</button></section>
+    <section class="document-actions"><button id="regenerate">重新產生</button><button id="editable-export">匯出可修改文件</button><button id="print-document">列印</button><button id="pdf-export">匯出 PDF</button><button class="primary" data-go="簽署">進入簽署流程</button></section>
     <section class="document-preview">${content}</section>`, "文件中心");
   document.querySelector("#document-type").onchange = event => { state.documentType = event.target.value; renderDocuments(); };
   document.querySelector("#regenerate").onclick = async () => {
-    const html = wrapDocument(content); const hash = await documentHash(html);
-    const current = documents.filter(item => item.type === state.documentType);
-    await put("documents", { id: uuid(), caseId: caseData.id, type: state.documentType, version: current.length + 1, status: "工作稿", content: html, hash, createdAt: nowIso() });
-    toast("已建立新的文件版本。");
+    const button = document.querySelector("#regenerate");
+    setButtonBusy(button, "產生中…");
+    try {
+      const html = wrapDocument(content); const hash = await documentHash(html);
+      const current = documents.filter(item => item.type === state.documentType);
+      await put("documents", { id: uuid(), caseId: caseData.id, type: state.documentType, version: current.length + 1, status: "工作稿", content: html, hash, createdAt: nowIso() });
+      toast("已建立新的文件版本。");
+    } catch (error) {
+      toast(`文件產生失敗：${error.message}`, "錯誤");
+    } finally {
+      restoreButton(button);
+    }
   };
   document.querySelector("#editable-export").onclick = () => downloadBlob(new Blob([wrapDocument(content)], { type: "application/msword" }), `${state.documentType}_未簽署工作稿.doc`);
-  document.querySelector("#fixed-export").onclick = () => {
-    const printWindow = window.open("", "_blank");
-    printWindow.document.write(wrapDocument(content)); printWindow.document.close(); printWindow.onload = () => printWindow.print();
-  };
+  document.querySelector("#print-document").onclick = () => openPrintDocument(content, false);
+  document.querySelector("#pdf-export").onclick = () => openPrintDocument(content, true);
   document.querySelector("[data-go='簽署']").onclick = () => navigate("簽署");
+}
+
+function setButtonBusy(button, label) {
+  button.dataset.originalLabel = button.textContent;
+  button.textContent = label;
+  button.disabled = true;
+  button.classList.add("is-loading");
+}
+
+function restoreButton(button) {
+  button.textContent = button.dataset.originalLabel || button.textContent;
+  button.disabled = false;
+  button.classList.remove("is-loading");
+}
+
+function openPrintDocument(content, pdfMode) {
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) return toast("瀏覽器阻擋了列印視窗，請允許彈出式視窗後重試。", "錯誤");
+  printWindow.document.write(wrapDocument(content));
+  printWindow.document.close();
+  printWindow.onload = () => {
+    if (pdfMode) toast("已開啟列印畫面：電腦請選擇「另存為 PDF」；iPhone 可由預覽的分享按鈕儲存 PDF。");
+    printWindow.focus();
+    printWindow.print();
+  };
 }
 
 async function renderSignature() {
