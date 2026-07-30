@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-const files = ["src/app.js","src/db.js","src/utils.js","src/documents.js","src/exporter.js","service-worker.js"];
+const files = ["src/app.js","src/db.js","src/utils.js","src/documents.js","src/exporter.js","src/summary.js","service-worker.js"];
 let failed = false;
 for (const file of files) {
   const text = await readFile(file, "utf8");

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node tools/server.mjs",
-    "check": "node --check src/app.js && node --check src/db.js && node --check src/utils.js && node --check src/documents.js && node --check src/exporter.js",
+    "check": "node --check src/app.js && node --check src/db.js && node --check src/utils.js && node --check src/documents.js && node --check src/exporter.js && node --check src/summary.js",
     "lint": "node tools/lint.mjs",
     "test": "node --test tests/*.test.mjs",
     "build": "node tools/build.mjs"
