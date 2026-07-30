@@ -34,4 +34,11 @@ test("非毒品證物不會顯示重量未填", () => {
   assert.match(summary, /證二iPhone 手機共1支/);
   assert.doesNotMatch(summary, /重量未填/);
 });
+test("現金證物摘要會顯示總額", () => {
+  const summary = evidenceSummary([{
+    number: "證三", evidenceCategory: "現金", name: "現金",
+    denomination: "1000", billCount: "3", cashTotal: "3000"
+  }]);
+  assert.match(summary, /總額3000元/);
+});
 test("未知摘要欄位會被攔截", () => assert.deepEqual(unknownSummaryFields("{{執行單位}}{{不存在欄位}}"), ["不存在欄位"]));

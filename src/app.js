@@ -350,8 +350,20 @@ async function renderCaseDetail() {
     renderCaseDetail();
   });
   document.querySelector("#end-search")?.addEventListener("click", async () => {
-    if (!confirm("確定現場搜索已結束？系統將記錄現在時間。")) return;
-    await put("cases", { ...caseData, searchEnd: nowIso(), updatedAt: nowIso() });
+    const outstanding = bundle.evidence.flatMap(item =>
+      validateEvidence(item, bundle.photos.filter(photo => photo.evidenceId === item.id)).map(issue => `${item.number}：${issue}`)
+    );
+    let exceptionReason = "";
+    if (outstanding.length) {
+      exceptionReason = prompt(`尚有 ${outstanding.length} 項缺漏：\n${outstanding.slice(0, 8).join("\n")}\n\n如仍需結束搜索，請輸入原因：`) || "";
+      if (!exceptionReason.trim()) return toast("尚有缺漏項目，須填寫原因才能結束搜索。", "錯誤");
+    } else if (!confirm("所有證物檢查完成。確定結束搜索並記錄現在時間？")) return;
+    const endedAt = nowIso();
+    await put("cases", { ...caseData, searchEnd: endedAt, searchEndExceptionReason: exceptionReason.trim(), updatedAt: endedAt });
+    await put("audit", {
+      id: uuid(), caseId: caseData.id, action: "結束搜索", entity: "cases", entityId: caseData.id,
+      at: endedAt, issueCount: outstanding.length, reason: exceptionReason.trim()
+    }, false);
     toast("已記錄搜索結束時間。");
     renderCaseDetail();
   });
@@ -408,6 +420,8 @@ async function createEvidence(caseData, current, selectedCategory = "") {
     grossWeight: "", packageWeight: "", netWeight: "", weightUnit: "公克", foundAddress: caseData.address,
     space: "", exactLocation: "", positionExtra: "", locationText: "", foundAt: "", foundOriginalAt: "", foundTimeSource: "",
     reagent: "", testResult: "", reaction: "",
+    brand: "", model: "", imei: "", phoneNumber: "", scaleResidue: "",
+    utensilType: "", material: "", residue: "", denomination: "", billCount: "", cashTotal: "", categoryNote: "",
     testAt: "", testOriginalAt: "", testTimeSource: "", notes: "", status: "採證中", createdAt: nowIso(), updatedAt: nowIso()
   };
   await put("evidence", item);
@@ -462,8 +476,9 @@ async function wizardStep(step, evidence, photos, caseData) {
     ${selectField("證物類別", "evidenceCategory", evidenceCategories, evidence.evidenceCategory || "毒品")}${field("證物名稱", "name", evidence.name, true)}
     ${isDrug ? await optionSelect("疑似毒品種類", "drugType", evidence.drugType) : ""}${await optionSelect("證物外觀", "appearance", evidence.appearance)}
     ${await optionSelect("顏色", "color", evidence.color)}${await optionSelect("包裝方式", "packaging", evidence.packaging)}
-    <label>數量<div class="quick-values">${[1,2,3,4,5,10].map(value => `<button type="button" data-quantity="${value}">${value}</button>`).join("")}</div><input type="number" inputmode="numeric" min="1" name="quantity" value="${escapeHtml(evidence.quantity)}"></label>
-    ${await optionSelect("數量單位", "quantityUnit", evidence.quantityUnit)}</div>`;
+    ${evidence.evidenceCategory === "現金" ? "" : `<label>數量<div class="quick-values">${[1,2,3,4,5,10].map(value => `<button type="button" data-quantity="${value}">${value}</button>`).join("")}</div><input type="number" inputmode="numeric" min="1" name="quantity" value="${escapeHtml(evidence.quantity)}"></label>
+    ${await optionSelect("數量單位", "quantityUnit", evidence.quantityUnit)}`}
+    ${categorySpecificFields(evidence)}</div>`;
   if (step === 3) return `${isDrug ? "" : '<div class="notice"><strong>非毒品證物</strong><p>重量與秤重照片為選填，可直接前往下一步。</p></div>'}<div class="form-grid"><label>毛重${isDrug ? "<em>必填</em>" : ""}<input type="number" inputmode="decimal" min="0" step="0.01" name="grossWeight" value="${escapeHtml(evidence.grossWeight)}"></label>
     <label>包裝重量<input type="number" inputmode="decimal" min="0" step="0.01" name="packageWeight" value="${escapeHtml(evidence.packageWeight)}"></label>
     <label>淨重<input name="netWeight" value="${escapeHtml(evidence.netWeight)}" readonly></label>${await optionSelect("重量單位", "weightUnit", evidence.weightUnit)}</div>
@@ -481,6 +496,22 @@ function issueStep(issue) {
   return ({ 一: 1, 二: 2, 三: 3, 四: 4, 五: 5 })[match?.[1]] || 1;
 }
 
+function categorySpecificFields(evidence) {
+  const category = evidence.evidenceCategory || "毒品";
+  if (category === "手機") return `${field("品牌", "brand", evidence.brand)}${field("型號", "model", evidence.model)}
+    ${field("IMEI", "imei", evidence.imei, false, "可於設定或機身標示查詢")}${field("門號", "phoneNumber", evidence.phoneNumber)}`;
+  if (category === "電子磅秤") return `${field("品牌", "brand", evidence.brand)}${field("型號", "model", evidence.model)}
+    ${field("秤面殘留情形", "scaleResidue", evidence.scaleResidue, false, "例如白色粉末殘留")}`;
+  if (category === "毒品施用器具") return `${field("器具種類", "utensilType", evidence.utensilType, false, "例如吸食器、針筒")}
+    ${field("材質", "material", evidence.material)}${field("殘留情形", "residue", evidence.residue)}`;
+  if (category === "現金") return `<label>面額<input type="number" inputmode="numeric" min="0" name="denomination" value="${escapeHtml(evidence.denomination)}"></label>
+    <label>張數<input type="number" inputmode="numeric" min="0" name="billCount" value="${escapeHtml(evidence.billCount)}"></label>
+    <label>總額<input name="cashTotal" value="${escapeHtml(evidence.cashTotal)}" readonly></label>`;
+  if (category === "包裝材料") return `${field("材質", "material", evidence.material)}${field("殘留情形", "residue", evidence.residue)}`;
+  if (category === "其他") return `<label class="wide">類別補充<textarea name="categoryNote">${escapeHtml(evidence.categoryNote)}</textarea></label>`;
+  return "";
+}
+
 async function optionSelect(category, name, value) {
   const options = (await getAll("options")).filter(item => item.category === category && item.enabled)
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || Number(b.favorite) - Number(a.favorite) || b.useCount - a.useCount || a.order - b.order);
@@ -492,8 +523,9 @@ function photoStep(type, photos, evidence, timeKey, label) {
   const source = photo && (photo.preview || photo.original);
   const sourceUrl = source instanceof Blob ? URL.createObjectURL(source) : source;
   return `<section class="photo-capture"><h2>${type}</h2>${photo ? `<div class="photo-preview"><img src="${sourceUrl}" alt="${type}">
-    <div><strong>${escapeHtml(photo.fileName)}</strong><span>${Math.round(photo.size / 1024)} 千位元組</span><span>摘要：${photo.hash.slice(0, 16)}…</span></div></div>` : `<div class="camera-placeholder">尚未拍攝</div>`}
-    <label class="camera-button">拍攝或選取照片<input type="file" accept="image/*" capture="environment" data-photo-type="${type}"></label>
+    <div><strong>${escapeHtml(photo.fileName)}</strong><span>${Math.round(photo.size / 1024)} 千位元組</span><span>摘要：${photo.hash.slice(0, 16)}…</span>
+    <button type="button" class="danger-button" data-delete-photo="${photo.id}">刪除照片</button></div></div>` : `<div class="camera-placeholder">尚未拍攝</div>`}
+    <label class="camera-button">${photo ? "重新拍攝或更換照片" : "拍攝或選取照片"}<input type="file" accept="image/*" capture="environment" data-photo-type="${type}"></label>
     ${timeKey ? `<div class="time-card"><strong>${label}</strong><span>${rocDateTime(evidence[timeKey])}</span><small>時間來源：${escapeHtml(evidence[timeKey.replace("At", "TimeSource")] || "尚未取得")}</small>
     <div class="time-actions"><button type="button" data-time-now="${timeKey}">使用現在時間</button><button type="button" data-time-edit="${timeKey}">手動修改</button><button type="button" data-time-clear="${timeKey}">清除時間</button></div></div>` : ""}</section>`;
 }
@@ -512,18 +544,42 @@ function bindWizard(evidence, photos, caseData) {
     document.querySelector("[name='quantity']").value = button.dataset.quantity;
     document.querySelector("[name='quantity']").dispatchEvent(new Event("change"));
   });
-  document.querySelector("[name='evidenceCategory']")?.addEventListener("change", event => {
+  document.querySelector("[name='evidenceCategory']")?.addEventListener("change", async event => {
     const name = document.querySelector("[name='name']");
     const previousCategory = evidence.evidenceCategory || "毒品";
     if (!name.value || name.value === "疑似毒品" || name.value === previousCategory) {
       name.value = event.target.value === "毒品" ? "疑似毒品" : event.target.value;
     }
+    await saveWizard(evidence);
+    renderEvidenceWizard();
   });
+  const updateCashTotal = () => {
+    const denomination = Number(document.querySelector("[name='denomination']")?.value || 0);
+    const billCount = Number(document.querySelector("[name='billCount']")?.value || 0);
+    const total = document.querySelector("[name='cashTotal']");
+    if (total) total.value = denomination && billCount ? String(denomination * billCount) : "";
+  };
+  document.querySelectorAll("[name='denomination'],[name='billCount']").forEach(input => input?.addEventListener("input", updateCashTotal));
   document.querySelectorAll("[name='grossWeight'],[name='packageWeight']").forEach(input => input?.addEventListener("input", () => {
     try { document.querySelector("[name='netWeight']").value = calculateNet(document.querySelector("[name='grossWeight']").value, document.querySelector("[name='packageWeight']").value); }
     catch (error) { toast(error.message, "錯誤"); }
   }));
   document.querySelectorAll("[data-photo-type]").forEach(input => input.onchange = event => addPhoto(event.target.files[0], event.target.dataset.photoType, evidence, photos));
+  document.querySelectorAll("[data-delete-photo]").forEach(button => button.onclick = async () => {
+    const photo = photos.find(item => item.id === button.dataset.deletePhoto);
+    if (!photo) return;
+    const reason = prompt("請輸入刪除照片原因：")?.trim();
+    if (!reason) return toast("必須填寫刪除原因。", "錯誤");
+    await put("audit", {
+      id: uuid(), caseId: evidence.caseId, action: "刪除照片", entity: "photos", entityId: photo.id,
+      evidenceId: evidence.id, photoType: photo.type, previousHash: photo.hash, reason, at: nowIso()
+    }, false);
+    await remove("photos", photo.id, evidence.caseId);
+    const timeKey = ({ "發現位置照片": "foundAt", "初驗照片": "testAt" })[photo.type];
+    if (timeKey) await put("evidence", { ...evidence, [timeKey]: "", [timeKey.replace("At", "TimeSource")]: "", updatedAt: nowIso() });
+    toast("照片已刪除並留下稽核紀錄。");
+    renderEvidenceWizard();
+  });
   document.querySelectorAll("[data-time-now]").forEach(button => button.onclick = async () => updateTime(evidence, button.dataset.timeNow, nowIso(), "系統拍攝時間"));
   document.querySelectorAll("[data-time-clear]").forEach(button => button.onclick = async () => updateTime(evidence, button.dataset.timeClear, "", ""));
   document.querySelectorAll("[data-time-edit]").forEach(button => button.onclick = async () => {
@@ -589,13 +645,26 @@ async function addPhoto(file, type, evidence, existing) {
   const hash = await sha256(file);
   const preview = await makePreview(file);
   const old = existing.find(item => item.type === type);
+  let replacementReason = "";
+  if (old) {
+    replacementReason = prompt("請輸入重新拍攝或更換照片的原因：")?.trim() || "";
+    if (!replacementReason) return toast("更換照片必須填寫原因。", "錯誤");
+  }
   const photo = {
     id: old?.id || uuid(), caseId: evidence.caseId, evidenceId: evidence.id, type, original: file, preview,
     fileName: file.name || `${type}.jpg`, mime: file.type, size: file.size, width: preview.width, height: preview.height,
     originalAt: finalAt, importedAt, finalAt, timeSource, caption: old?.caption || "", hash, order: ({ "發現位置照片": 1, "秤重照片": 2, "初驗照片": 3 })[type] || 4,
-    createdAt: old?.createdAt || importedAt
+    createdAt: old?.createdAt || importedAt,
+    replacementHistory: old ? [...(old.replacementHistory || []), {
+      previousHash: old.hash, previousFileName: old.fileName, replacedAt: importedAt, reason: replacementReason
+    }] : []
   };
   photo.caption = photo.caption || photoCaption(evidence, type, photo.order);
+  if (old) await put("audit", {
+    id: uuid(), caseId: evidence.caseId, action: "重拍取代照片", entity: "photos", entityId: old.id,
+    evidenceId: evidence.id, photoType: type, previousHash: old.hash, newHash: hash,
+    reason: replacementReason, at: importedAt
+  }, false);
   await put("photos", photo);
   const map = { "發現位置照片": "foundAt", "初驗照片": "testAt" };
   const key = map[type];
@@ -637,7 +706,9 @@ export function validateEvidence(item, photos) {
   if (!has("發現位置照片")) issues.push("第一步：缺少發現位置照片");
   if (!item.foundAt) issues.push("第一步：缺少查獲時間");
   if (!item.locationText) issues.push("第一步：缺少查獲位置");
-  if (!item.quantity) issues.push("第二步：缺少數量");
+  if (item.evidenceCategory !== "現金" && !item.quantity) issues.push("第二步：缺少數量");
+  if (item.evidenceCategory === "現金" && !item.denomination) issues.push("第二步：缺少現金面額");
+  if (item.evidenceCategory === "現金" && !item.billCount) issues.push("第二步：缺少現金張數");
   if (isDrug && !item.grossWeight) issues.push("第三步：缺少毛重");
   if (isDrug && !has("秤重照片")) issues.push("第三步：缺少秤重照片");
   if (isDrug && item.testResult && item.testResult !== "未實施初驗" && !item.reagent) issues.push("第四步：有初驗結果但未選初驗試劑");

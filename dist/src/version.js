@@ -1,6 +1,16 @@
-export const APP_VERSION = "1.4.1";
+export const APP_VERSION = "1.5.0";
 
 export const CHANGELOG = [
+  {
+    version: "1.5.0",
+    date: "2026-07-30",
+    changes: [
+      "依手機、電子磅秤、施用器具、現金、包裝材料等類別顯示專用欄位。",
+      "現金依面額與張數自動計算總額。",
+      "照片可重拍、更換或刪除，並記錄原雜湊、時間及原因。",
+      "結束搜索前檢查所有證物缺漏，例外結束必須填寫原因。"
+    ]
+  },
   {
     version: "1.4.1",
     date: "2026-07-30",
