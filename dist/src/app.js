@@ -10,6 +10,7 @@ const app = document.querySelector("#app");
 const state = { page: "首頁", caseId: "", evidenceId: "", step: 1, documentType: "搜索扣押筆錄", previewRead: false };
 const documentTypes = ["搜索扣押筆錄", "毒品初步檢驗紀錄表", "證物照片紀錄", "扣押物品清冊"];
 const statuses = ["草稿", "採證中", "已完成", "待簽署", "已簽署", "已作廢"];
+const CASE_DRAFT_KEY = "證跡_新增案件草稿";
 
 function shell(content, title = "證跡") {
   app.innerHTML = `<header class="topbar"><button class="brand" data-go="首頁"><span>證跡</span><small>證物採證與文件產製系統</small></button>
@@ -69,10 +70,15 @@ async function render() {
 }
 
 async function renderHome() {
-  const cases = await getAll("cases");
+  const cases = (await getAll("cases")).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const counts = Object.fromEntries(statuses.map(status => [status, cases.filter(item => item.status === status).length]));
+  const recent = cases.find(item => !["已簽署", "已作廢"].includes(item.status)) || cases[0];
+  const savedDraft = localStorage.getItem(CASE_DRAFT_KEY);
   shell(`<section class="home-overview"><div><p class="eyebrow">完全本地端・可離線使用</p><h1>現場案件工作台</h1><p>資料只保存在此裝置。</p></div>
     <button class="primary large" data-go="新增案件">＋ 新增案件</button></section>
+    ${recent ? `<button class="continue-case" data-go="案件詳情" data-id="${recent.id}">
+      <span><small>繼續上次案件</small><strong>${escapeHtml(recent.name || "未命名案件")}</strong><em>${escapeHtml(recent.status)}｜${rocDateTime(recent.updatedAt)}</em></span><b>繼續 →</b>
+    </button>` : savedDraft ? `<button class="continue-case" data-go="新增案件"><span><small>尚有未完成草稿</small><strong>繼續填寫新案件</strong></span><b>繼續 →</b></button>` : ""}
     <section class="status-grid compact">
       ${["採證中", "已完成", "待簽署", "已簽署"].map(status => `<button class="status-card" data-go="案件列表"><strong>${counts[status]}</strong><span>${status}案件</span></button>`).join("")}
     </section>
@@ -123,14 +129,21 @@ function statusClass(status) {
 }
 
 async function renderCaseForm(existing) {
-  const data = existing || {
+  const emptyCase = {
     id: uuid(), name: "", reason: "違反毒品危害防制條例", suspect: "", unit: "", address: "",
     addressCity: "臺北市", addressDistrict: "", addressRoad: "", addressCustomRoad: "",
     addressSection: "", addressLane: "", addressAlley: "", addressNumber: "", addressFloor: "", addressRoom: "", addressLocationNote: "",
     executionDate: nowIso(), searchStart: "", searchEnd: "", officer: "", recorder: "", tester: "", executors: "",
     presentPeople: "", notes: "", status: "草稿", createdAt: nowIso(), updatedAt: nowIso(), lockedAt: ""
   };
+  let restoredDraft = null;
+  if (!existing) {
+    try { restoredDraft = JSON.parse(localStorage.getItem(CASE_DRAFT_KEY) || "null"); }
+    catch { localStorage.removeItem(CASE_DRAFT_KEY); }
+  }
+  const data = existing || { ...emptyCase, ...(restoredDraft?.values || {}) };
   shell(`<form id="case-form" class="panel case-form">
+    ${restoredDraft ? `<div class="draft-restored">已恢復 ${rocDateTime(restoredDraft.savedAt)} 的未完成草稿。<button type="button" id="discard-case-draft">清除草稿</button></div>` : ""}
     <div class="form-stepper" role="tablist" aria-label="案件資料步驟">
       ${["基本", "地址", "人員", "確認"].map((label, index) => `<button type="button" data-form-step="${index + 1}" class="${index === 0 ? "current" : ""}"><span>${index + 1}</span>${label}</button>`).join("")}
     </div>
@@ -161,6 +174,7 @@ async function renderCaseForm(existing) {
   </form>`, existing ? "修改案件資料" : "新增案件");
   bindAddressBuilder(data);
   bindCaseFormSteps();
+  bindCaseDraft(existing);
   document.querySelector("#case-form").onsubmit = async event => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
@@ -169,10 +183,36 @@ async function renderCaseForm(existing) {
     }
     const item = { ...data, ...values, searchStart: inputToIso(values.searchStart), searchEnd: data.searchEnd || "", updatedAt: nowIso() };
     await put("cases", item);
+    localStorage.removeItem(CASE_DRAFT_KEY);
     toast("案件已儲存。");
     state.caseId = item.id;
     navigate("案件詳情", item.id);
   };
+}
+
+function bindCaseDraft(existing) {
+  if (existing) return;
+  const form = document.querySelector("#case-form");
+  let timer;
+  const saveDraft = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const values = Object.fromEntries(new FormData(form));
+      localStorage.setItem(CASE_DRAFT_KEY, JSON.stringify({ values, savedAt: nowIso() }));
+      document.querySelector(".draft-save-status")?.remove();
+      const status = document.createElement("span");
+      status.className = "draft-save-status";
+      status.textContent = "草稿已自動儲存";
+      form.querySelector(".form-stepper").after(status);
+    }, 350);
+  };
+  form.addEventListener("input", saveDraft);
+  form.addEventListener("change", saveDraft);
+  document.querySelector("#discard-case-draft")?.addEventListener("click", () => {
+    if (!confirm("確定清除這份未完成草稿？")) return;
+    localStorage.removeItem(CASE_DRAFT_KEY);
+    renderCaseForm();
+  });
 }
 
 function bindCaseFormSteps() {
@@ -403,8 +443,13 @@ async function wizardStep(step, evidence, photos, caseData) {
     <label class="wide">反應情形<textarea name="reaction">${escapeHtml(evidence.reaction)}</textarea></label></div>${photoStep("初驗照片", photos, evidence, "testAt", "初驗時間")}`;
   const issues = validateEvidence(evidence, photos);
   return `<section class="completion ${issues.length ? "has-errors" : ""}"><div class="completion-mark">${issues.length ? "！" : "✓"}</div>
-    <h2>${issues.length ? "尚有資料需要補齊" : "採證完成"}</h2>${issues.length ? `<ul>${issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul>` : "<p>照片、時間、重量與初驗資料皆已完成。</p>"}
-    <button id="generate-captions">重新產生照片說明</button></section>`;
+    <h2>${issues.length ? "尚有資料需要補齊" : "採證完成"}</h2>${issues.length ? `<div class="issue-jump-list">${issues.map(issue => `<button type="button" data-issue-step="${issueStep(issue)}">${escapeHtml(issue)}<span>前往修正 →</span></button>`).join("")}</div>` : "<p>照片、時間、重量與初驗資料皆已完成。</p>"}
+    <div class="completion-actions"><button id="generate-captions">重新產生照片說明</button>${issues.length ? "" : '<button class="primary" id="add-next-evidence">完成並新增下一件</button>'}</div></section>`;
+}
+
+function issueStep(issue) {
+  const match = String(issue).match(/^第([一二三四五])步/);
+  return ({ 一: 1, 二: 2, 三: 3, 四: 4, 五: 5 })[match?.[1]] || 1;
 }
 
 async function optionSelect(category, name, value) {
@@ -454,6 +499,17 @@ function bindWizard(evidence, photos, caseData) {
     let index = 0;
     for (const photo of photos) { index += 1; await put("photos", { ...photo, caption: photoCaption(evidence, photo.type, index) }); }
     toast("照片說明已重新產生。"); renderEvidenceWizard();
+  });
+  document.querySelectorAll("[data-issue-step]").forEach(button => button.onclick = async () => {
+    await saveWizard(evidence);
+    state.step = Number(button.dataset.issueStep);
+    renderEvidenceWizard();
+  });
+  document.querySelector("#add-next-evidence")?.addEventListener("click", async () => {
+    const saved = await saveWizard(evidence);
+    if (!saved) return;
+    const current = await byCase("evidence", evidence.caseId);
+    await createEvidence(caseData, current);
   });
   document.querySelectorAll("input,select,textarea").forEach(element => {
     if (!element.matches("[type='file']")) element.addEventListener("change", () => saveWizard(evidence));

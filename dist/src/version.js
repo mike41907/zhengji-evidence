@@ -1,6 +1,16 @@
-export const APP_VERSION = "1.2.0";
+export const APP_VERSION = "1.3.0";
 
 export const CHANGELOG = [
+  {
+    version: "1.3.0",
+    date: "2026-07-30",
+    changes: [
+      "新增案件表單自動儲存及意外關閉後恢復草稿。",
+      "首頁新增繼續上次案件捷徑。",
+      "採證缺漏項目可直接跳到對應步驟。",
+      "證物完成後可直接新增下一件。"
+    ]
+  },
   {
     version: "1.2.0",
     date: "2026-07-30",
