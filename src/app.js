@@ -2,6 +2,7 @@ import { byCase, get, getAll, importDatabase, openDatabase, put, remove, seedDef
 import { calculateNet, chineseNumber, downloadBlob, escapeHtml, inputToIso, localInputValue, nowIso, rocDateTime, sha256, toast, uuid } from "./utils.js";
 import { documentHash, generateDocument, photoCaption, wrapDocument } from "./documents.js";
 import { collectCase, exportAllBackup, exportCase } from "./exporter.js";
+import { DEFAULT_SUMMARY_TEMPLATE, renderSummary, SUMMARY_FIELDS, summaryValues, unknownSummaryFields } from "./summary.js";
 
 const app = document.querySelector("#app");
 const state = { page: "首頁", caseId: "", evidenceId: "", step: 1, documentType: "搜索扣押筆錄", previewRead: false };
@@ -47,6 +48,7 @@ async function render() {
     else if (state.page === "新增案件") await renderCaseForm();
     else if (state.page === "案件詳情") await renderCaseDetail();
     else if (state.page === "證物採證") await renderEvidenceWizard();
+    else if (state.page === "案件摘要") await renderCaseSummary();
     else if (state.page === "文件中心") await renderDocuments();
     else if (state.page === "簽署") await renderSignature();
     else if (state.page === "資料管理") await renderDataManager();
@@ -163,12 +165,13 @@ async function renderCaseDetail() {
     <p>${escapeHtml(caseData.caseNumber)}｜${escapeHtml(caseData.reason)}</p><p>${escapeHtml(caseData.address)}</p></div>
     <div class="progress-ring"><strong>${completion}%</strong><span>採證完成度</span></div></section>
     <section class="action-row"><button id="edit-case">修改案件資料</button><button class="primary" id="add-evidence">新增證物</button>
-      <button data-go="文件中心">產生文件</button><button id="export-case">匯出完整案件</button></section>
+      <button data-go="案件摘要">產生案件摘要</button><button data-go="文件中心">產生文件</button><button id="export-case">匯出完整案件</button></section>
     <section><div class="section-title"><h2>證物卡片</h2><span>${bundle.evidence.length} 件</span></div>
     <div class="evidence-list">${await evidenceCards(bundle.evidence)}</div></section>
     <section class="danger-zone"><h2>案件管理</h2><button id="lock-case">鎖定案件</button><button class="danger-button" id="void-case">作廢案件</button></section>`, "案件詳情");
   document.querySelector("#edit-case").onclick = () => renderCaseForm(caseData);
   document.querySelector("#add-evidence").onclick = () => createEvidence(caseData, bundle.evidence);
+  document.querySelector("[data-go='案件摘要']").onclick = () => navigate("案件摘要");
   document.querySelector("[data-go='文件中心']").onclick = () => navigate("文件中心");
   document.querySelector("#export-case").onclick = async () => {
     try { await exportCase(caseData, bundle.evidence, bundle.photos, bundle.documents, bundle.signatures); toast("完整案件壓縮檔已產生。"); }
@@ -395,6 +398,66 @@ export function validateEvidence(item, photos) {
   if (item.testResult && item.testResult !== "未實施初驗" && !has("初驗照片")) issues.push("第四步：有初驗結果但缺少初驗照片");
   if (has("初驗照片") && !item.testAt) issues.push("第四步：有初驗照片但缺少初驗時間");
   return issues;
+}
+
+async function getSummaryTemplateOption() {
+  const options = await getAll("options");
+  return options.find(item => item.category === "摘要範本") || null;
+}
+
+async function renderCaseSummary() {
+  const caseData = await get("cases", state.caseId);
+  if (!caseData) return navigate("案件列表");
+  const evidence = await byCase("evidence", caseData.id);
+  const templateOption = await getSummaryTemplateOption();
+  const template = templateOption?.name || DEFAULT_SUMMARY_TEMPLATE;
+  const summary = renderSummary(template, caseData, evidence);
+  const values = summaryValues(caseData, evidence);
+  shell(`<section class="panel summary-panel">
+    <div class="section-title"><div><p class="eyebrow dark">依案件固定欄位自動產生</p><h2>案件摘要</h2></div><span class="badge active">自動產生</span></div>
+    <blockquote id="generated-summary">${escapeHtml(summary)}</blockquote>
+    <div class="action-row"><button class="primary" id="copy-summary">複製摘要</button><button id="download-summary">匯出文字檔</button><button id="edit-summary-template">修改摘要範本</button></div>
+  </section>
+  <section class="panel"><h2>本次帶入資料</h2><div class="summary-values">${Object.entries(values).map(([key, value]) =>
+    `<div><strong>${escapeHtml(key)}</strong><span>${escapeHtml(value)}</span></div>`).join("")}</div>
+    <p class="field-note">以上內容來自案件及證物固定欄位。如需變更，請返回案件或證物採證頁修改原始資料。</p>
+  </section>
+  <dialog id="summary-template-dialog"><form method="dialog" id="summary-template-form">
+    <div class="dialog-heading"><h2>修改摘要範本</h2><button value="cancel" aria-label="關閉">關閉</button></div>
+    <p>可修改固定文字；系統欄位請保留雙大括號。產生摘要時會自動代入案件資料。</p>
+    <label>摘要範本<textarea id="summary-template-text" rows="8">${escapeHtml(template)}</textarea></label>
+    <div class="template-fields"><strong>可用固定欄位</strong>${SUMMARY_FIELDS.map(field => `<button type="button" data-summary-field="${field}">{{${field}}}</button>`).join("")}</div>
+    <p id="template-error" class="error-text" role="alert"></p>
+    <div class="dialog-actions"><button value="cancel">取消</button><button type="button" class="primary" id="save-summary-template">儲存範本</button></div>
+  </form></dialog>`, "案件摘要");
+  document.querySelector("#copy-summary").onclick = async () => {
+    try { await navigator.clipboard.writeText(summary); toast("案件摘要已複製。"); }
+    catch { toast("瀏覽器無法直接複製，請長按摘要文字後選擇複製。", "錯誤"); }
+  };
+  document.querySelector("#download-summary").onclick = () =>
+    downloadBlob(new Blob([summary], { type: "text/plain;charset=utf-8" }), `${caseData.name || "案件"}_摘要.txt`);
+  const dialog = document.querySelector("#summary-template-dialog");
+  document.querySelector("#edit-summary-template").onclick = () => dialog.showModal();
+  document.querySelectorAll("[data-summary-field]").forEach(button => button.onclick = () => {
+    const textarea = document.querySelector("#summary-template-text");
+    textarea.setRangeText(`{{${button.dataset.summaryField}}}`, textarea.selectionStart, textarea.selectionEnd, "end");
+    textarea.focus();
+  });
+  document.querySelector("#save-summary-template").onclick = async () => {
+    const newTemplate = document.querySelector("#summary-template-text").value.trim();
+    const unknown = unknownSummaryFields(newTemplate);
+    const error = document.querySelector("#template-error");
+    if (!newTemplate) { error.textContent = "摘要範本不得空白。"; return; }
+    if (unknown.length) { error.textContent = `找不到固定欄位：${unknown.join("、")}。請修正或使用下方欄位按鈕。`; return; }
+    const now = nowIso();
+    await put("options", {
+      ...(templateOption || { id: uuid(), category: "摘要範本", useCount: 0, lastUsedAt: "", order: 0, pinned: true, favorite: true, isDefault: true, builtIn: true, enabled: true, createdAt: now }),
+      name: newTemplate, updatedAt: now
+    });
+    dialog.close();
+    toast("摘要範本已儲存。");
+    renderCaseSummary();
+  };
 }
 
 async function renderDocuments() {
