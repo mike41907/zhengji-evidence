@@ -3,7 +3,7 @@ import { rocDateTime } from "./utils.js";
 export const DEFAULT_SUMMARY_TEMPLATE = "{{執行單位}}於{{執行時間}}在{{執行地址}}查獲犯罪嫌疑人{{犯罪嫌疑人}}，現場查獲{{毒品明細}}。";
 
 export const SUMMARY_FIELDS = [
-  "案號", "案件名稱", "案由", "執行單位", "執行時間",
+  "案件名稱", "案由", "執行單位", "執行時間",
   "執行地址", "犯罪嫌疑人", "承辦人", "毒品明細", "證物數量"
 ];
 
@@ -20,7 +20,6 @@ export function evidenceSummary(evidenceList) {
 
 export function summaryValues(caseData, evidenceList) {
   return {
-    "案號": caseData.caseNumber || "案號未填",
     "案件名稱": caseData.name || "案件名稱未填",
     "案由": caseData.reason || "案由未填",
     "執行單位": caseData.unit || "執行單位未填",

@@ -26,14 +26,14 @@ export function generateDocument(type, caseData, evidenceList, photos, options =
   let body = "";
   if (type === "搜索扣押筆錄") {
     body = heading(type, caseData, draft) + table([
-      ["案號", caseData.caseNumber], ["案由", caseData.reason], ["執行單位", caseData.unit],
+      ["案由", caseData.reason], ["執行單位", caseData.unit],
       ["犯罪嫌疑人", caseData.suspect], ["搜索地點", caseData.address],
       ["搜索開始時間", rocDateTime(caseData.searchStart)], ["搜索結束時間", rocDateTime(caseData.searchEnd)],
       ["執行人員", caseData.executors], ["在場人員", caseData.presentPeople]
     ]) + `<h2>扣押物品及查獲情形</h2>${evidenceTable(evidenceList)}${signatureArea(options)}`;
   } else if (type === "毒品初步檢驗紀錄表") {
     body = evidenceList.map(item => heading(type, caseData, draft) + table([
-      ["案號", caseData.caseNumber], ["犯罪嫌疑人", caseData.suspect],
+      ["犯罪嫌疑人", caseData.suspect],
       ["查獲日期時間", rocDateTime(item.foundAt)], ["查獲地點", `${caseData.address || ""}${item.locationText || ""}`],
       ["證物編號", item.number], ["證物名稱", item.name], ["外觀", item.appearance], ["顏色", item.color],
       ["包裝方式", item.packaging], ["數量", `${item.quantity || ""}${item.quantityUnit || ""}`],
