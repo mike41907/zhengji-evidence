@@ -63,6 +63,50 @@ export async function remove(storeName, id, caseId = "") {
   await put("audit", { id: uuid(), caseId, action: "刪除", entity: storeName, entityId: id, at: nowIso() }, false);
 }
 
+export async function deleteEvidenceData(evidenceId, caseId) {
+  const db = await openDatabase();
+  const photoItems = (await byCase("photos", caseId)).filter(item => item.evidenceId === evidenceId);
+  const transaction = db.transaction(["evidence", "photos"], "readwrite");
+  const photos = transaction.objectStore("photos");
+  for (const photo of photoItems) photos.delete(photo.id);
+  transaction.objectStore("evidence").delete(evidenceId);
+  await new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error || new Error("刪除證物失敗。"));
+  });
+  await put("audit", {
+    id: uuid(), caseId, action: "刪除證物", entity: "evidence", entityId: evidenceId,
+    deletedPhotoCount: photoItems.length, at: nowIso()
+  }, false);
+}
+
+export async function deleteCaseData(caseId) {
+  const db = await openDatabase();
+  const relatedStores = ["evidence", "photos", "documents", "signatures"];
+  const relatedItems = Object.fromEntries(await Promise.all(
+    relatedStores.map(async storeName => [storeName, await byCase(storeName, caseId)])
+  ));
+  const transaction = db.transaction(["cases", ...relatedStores], "readwrite");
+  transaction.objectStore("cases").delete(caseId);
+  const deletedCounts = {};
+  for (const storeName of relatedStores) {
+    const store = transaction.objectStore(storeName);
+    const items = relatedItems[storeName];
+    deletedCounts[storeName] = items.length;
+    for (const item of items) store.delete(item.id);
+  }
+  await new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error || new Error("刪除案件失敗。"));
+  });
+  await put("audit", {
+    id: uuid(), caseId, action: "刪除案件", entity: "cases", entityId: caseId,
+    deletedCounts, at: nowIso()
+  }, false);
+}
+
 export async function byCase(storeName, caseId) {
   const db = await openDatabase();
   const store = db.transaction(storeName).objectStore(storeName);

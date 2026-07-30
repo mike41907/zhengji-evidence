@@ -1,4 +1,4 @@
-import { byCase, clearAllCaseData, get, getAll, importDatabase, openDatabase, put, remove, seedDefaults } from "./db.js";
+import { byCase, clearAllCaseData, deleteCaseData, deleteEvidenceData, get, getAll, importDatabase, openDatabase, put, remove, seedDefaults } from "./db.js";
 import { calculateNet, chineseNumber, cloneEvidenceSettings, downloadBlob, escapeHtml, inputToIso, localInputValue, nowIso, rocDateTime, sha256, toast, uuid } from "./utils.js";
 import { documentHash, generateDocument, photoCaption, wrapDocument } from "./documents.js";
 import { collectCase, exportAllBackup, exportCase } from "./exporter.js";
@@ -367,7 +367,7 @@ async function renderCaseDetail() {
       <button data-go="案件摘要">產生案件摘要</button><button data-go="文件中心">產生文件</button><button id="export-case">匯出完整案件</button></section>
     <section><div class="section-title"><h2>證物卡片</h2><span>${bundle.evidence.length} 件</span></div>
     <div class="evidence-list">${await evidenceCards(bundle.evidence)}</div></section>
-    <section class="danger-zone"><h2>案件管理</h2><button id="lock-case">鎖定案件</button><button class="danger-button" id="void-case">作廢案件</button></section>`, "案件詳情");
+    <section class="danger-zone"><h2>案件管理</h2><button id="lock-case">鎖定案件</button><button class="danger-button" id="delete-case">刪除案件</button></section>`, "案件詳情");
   document.querySelector("#edit-case").onclick = () => renderCaseForm(caseData);
   document.querySelector("#add-evidence").onclick = () => createEvidence(caseData, bundle.evidence);
   document.querySelector("[data-go='案件摘要']").onclick = () => navigate("案件摘要");
@@ -417,12 +417,15 @@ async function renderCaseDetail() {
     await put("cases", { ...caseData, status: "已完成", lockedAt: nowIso(), updatedAt: nowIso() });
     renderCaseDetail();
   };
-  document.querySelector("#void-case").onclick = async () => {
-    const reason = prompt("請輸入作廢原因：");
-    if (!reason || !confirm("確定作廢此案件？原始資料仍會保留。")) return;
-    await put("cases", { ...caseData, status: "已作廢", voidReason: reason, updatedAt: nowIso() });
-    renderCaseDetail();
+  document.querySelector("#delete-case").onclick = async () => {
+    const confirmation = prompt(`刪除後將移除此案件及其證物、照片、文件與簽名，且無法復原。\n\n請輸入案件名稱「${caseData.name}」確認：`);
+    if (confirmation !== caseData.name) return confirmation === null ? undefined : toast("案件名稱不一致，未執行刪除。", "錯誤");
+    if (!confirm("最後確認：確定永久刪除此案件？")) return;
+    await deleteCaseData(caseData.id);
+    toast("案件及其相關資料已刪除。");
+    navigate("案件列表");
   };
+  bindEvidenceSwipe(bundle.evidence);
 }
 
 async function evidenceCards(items) {
@@ -430,10 +433,67 @@ async function evidenceCards(items) {
   return (await Promise.all(items.sort((a, b) => a.sequence - b.sequence).map(async item => {
     const photos = (await byCase("photos", item.caseId)).filter(photo => photo.evidenceId === item.id);
     const checks = validateEvidence(item, photos);
-    return `<button class="evidence-card" data-go="證物採證" data-id="${item.id}"><div><span class="evidence-number">${escapeHtml(item.number)}</span>
+    return `<div class="evidence-swipe-row" data-swipe-row="${item.id}">
+      <button type="button" class="evidence-swipe-delete" data-delete-evidence="${item.id}" aria-label="刪除${escapeHtml(item.number)}">刪除</button>
+      <button class="evidence-card" data-go="證物採證" data-id="${item.id}"><div><span class="evidence-number">${escapeHtml(item.number)}</span>
       <h3>${escapeHtml(item.name || "尚未填寫證物名稱")}</h3><p>${escapeHtml(item.evidenceCategory || "毒品")}｜${escapeHtml(item.drugType || item.appearance || "內容未填")}｜${escapeHtml(item.quantity || "0")}${escapeHtml(item.quantityUnit || "")}</p></div>
-      <div>${checks.length ? `<span class="badge danger">缺漏 ${checks.length} 項</span><small>${escapeHtml(checks.slice(0, 2).join("、"))}</small>` : '<span class="badge done">採證完成</span>'}</div></button>`;
+      <div>${checks.length ? `<span class="badge danger">缺漏 ${checks.length} 項</span><small>${escapeHtml(checks.slice(0, 2).join("、"))}</small>` : '<span class="badge done">採證完成</span>'}</div></button>
+    </div>`;
   }))).join("");
+}
+
+function bindEvidenceSwipe(items) {
+  document.querySelectorAll("[data-swipe-row]").forEach(row => {
+    const card = row.querySelector(".evidence-card");
+    let startX = 0;
+    let startY = 0;
+    let offset = 0;
+    let dragging = false;
+    card.addEventListener("pointerdown", event => {
+      startX = event.clientX;
+      startY = event.clientY;
+      offset = row.classList.contains("open") ? -88 : 0;
+      dragging = true;
+      row.dataset.swiped = "false";
+    });
+    card.addEventListener("pointermove", event => {
+      if (!dragging) return;
+      const deltaX = event.clientX - startX;
+      const deltaY = event.clientY - startY;
+      if (Math.abs(deltaY) > Math.abs(deltaX)) return;
+      const next = Math.max(-88, Math.min(0, offset + deltaX));
+      if (Math.abs(deltaX) > 8) row.dataset.swiped = "true";
+      card.style.transform = `translateX(${next}px)`;
+    });
+    const finish = event => {
+      if (!dragging) return;
+      dragging = false;
+      const deltaX = event.clientX - startX;
+      const shouldOpen = offset + deltaX < -44;
+      row.classList.toggle("open", shouldOpen);
+      card.style.transform = "";
+    };
+    card.addEventListener("pointerup", finish);
+    card.addEventListener("pointercancel", finish);
+    card.addEventListener("click", event => {
+      if (row.dataset.swiped === "true" || row.classList.contains("open")) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (row.dataset.swiped !== "true") row.classList.remove("open");
+      }
+      row.dataset.swiped = "false";
+    }, true);
+  });
+  document.querySelectorAll("[data-delete-evidence]").forEach(button => {
+    button.onclick = async event => {
+      event.stopPropagation();
+      const evidence = items.find(item => item.id === button.dataset.deleteEvidence);
+      if (!evidence || !confirm(`確定刪除「${evidence.number} ${evidence.name}」？相關照片也會一併刪除且無法復原。`)) return;
+      await deleteEvidenceData(evidence.id, evidence.caseId);
+      toast(`${evidence.number} 已刪除。`);
+      await renderCaseDetail();
+    };
+  });
 }
 
 async function createEvidence(caseData, current, selectedCategory = "") {
