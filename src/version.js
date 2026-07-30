@@ -1,6 +1,15 @@
-export const APP_VERSION = "1.9.1";
+export const APP_VERSION = "1.9.2";
 
 export const CHANGELOG = [
+  {
+    version: "1.9.2",
+    date: "2026-07-30",
+    changes: [
+      "照片新增拆分為直接拍照與從相簿選擇。",
+      "縮小手機未拍照區與照片預覽高度。",
+      "壓縮證物卡片的留白、字級與資訊間距。"
+    ]
+  },
   {
     version: "1.9.1",
     date: "2026-07-30",
