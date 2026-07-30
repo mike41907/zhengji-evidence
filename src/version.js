@@ -1,6 +1,14 @@
-export const APP_VERSION = "1.4.0";
+export const APP_VERSION = "1.4.1";
 
 export const CHANGELOG = [
+  {
+    version: "1.4.1",
+    date: "2026-07-30",
+    changes: [
+      "按下新增證物時先顯示證物類別下拉選單。",
+      "選定類別後才建立證物並開始採證。"
+    ]
+  },
   {
     version: "1.4.0",
     date: "2026-07-30",

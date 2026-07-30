@@ -395,12 +395,15 @@ async function evidenceCards(items) {
   }))).join("");
 }
 
-async function createEvidence(caseData, current) {
+async function createEvidence(caseData, current, selectedCategory = "") {
   if (caseData.status === "已簽署" || caseData.status === "已作廢") return toast("已簽署或已作廢案件不得直接新增證物。", "錯誤");
+  const evidenceCategory = selectedCategory || await chooseEvidenceCategory();
+  if (!evidenceCategory) return;
   const sequence = current.length + 1;
   const prefix = localStorage.getItem("證物編號格式") || "證";
+  const defaultName = evidenceCategory === "毒品" ? "疑似毒品" : evidenceCategory === "其他" ? "其他證物" : evidenceCategory;
   const item = {
-    id: uuid(), caseId: caseData.id, sequence, number: `${prefix}${chineseNumber(sequence)}`, evidenceCategory: "毒品", name: "疑似毒品",
+    id: uuid(), caseId: caseData.id, sequence, number: `${prefix}${chineseNumber(sequence)}`, evidenceCategory, name: defaultName,
     drugType: "", appearance: "", color: "", packaging: "", quantity: "", quantityUnit: "包",
     grossWeight: "", packageWeight: "", netWeight: "", weightUnit: "公克", foundAddress: caseData.address,
     space: "", exactLocation: "", positionExtra: "", locationText: "", foundAt: "", foundOriginalAt: "", foundTimeSource: "",
@@ -410,6 +413,29 @@ async function createEvidence(caseData, current) {
   await put("evidence", item);
   state.evidenceId = item.id; state.step = 1;
   navigate("證物採證", item.id);
+}
+
+function chooseEvidenceCategory() {
+  return new Promise(resolve => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "evidence-category-dialog";
+    dialog.innerHTML = `<form method="dialog">
+      <div class="dialog-heading"><div><p class="eyebrow dark">新增證物</p><h2>請先選擇證物類別</h2></div></div>
+      <label>證物類別<select id="new-evidence-category">${evidenceCategories.map(category => `<option>${category}</option>`).join("")}</select></label>
+      <p class="field-note">非毒品證物不會強制要求秤重與毒品初驗資料。</p>
+      <div class="dialog-actions"><button value="cancel">取消</button><button class="primary" id="confirm-evidence-category" value="default">開始採證</button></div>
+    </form>`;
+    document.body.append(dialog);
+    let selected = "";
+    dialog.querySelector("#confirm-evidence-category").onclick = () => {
+      selected = dialog.querySelector("#new-evidence-category").value;
+    };
+    dialog.onclose = () => {
+      dialog.remove();
+      resolve(selected);
+    };
+    dialog.showModal();
+  });
 }
 
 async function renderEvidenceWizard() {
