@@ -1,6 +1,15 @@
-export const APP_VERSION = "1.1.1";
+export const APP_VERSION = "1.2.0";
 
 export const CHANGELOG = [
+  {
+    version: "1.2.0",
+    date: "2026-07-30",
+    changes: [
+      "依實際勤務流程將搜索結束時間移至案件詳情最後記錄。",
+      "新增開始搜索、結束搜索及搜索時間修改功能。",
+      "案件詳情顯示搜索進行狀態與起訖時間。"
+    ]
+  },
   {
     version: "1.1.1",
     date: "2026-07-30",
