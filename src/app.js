@@ -1,4 +1,4 @@
-import { byCase, clearAllCaseData, deleteCaseData, deleteEvidenceData, get, getAll, importDatabase, openDatabase, put, remove, seedDefaults } from "./db.js";
+import { byCase, clearAllCaseData, deleteCaseData, deleteEvidenceData, get, getAll, importDatabase, openDatabase, permanentlyDeleteTrash, purgeExpiredTrash, put, remove, restoreCaseData, seedDefaults } from "./db.js";
 import { adjacentEvidenceStep, chineseNumber, cloneEvidenceSettings, dateInputValue, downloadBlob, escapeHtml, evidenceLocationDefaults, inputToIso, localInputValue, nowIso, rocDate, rocDateTime, sha256, toast, uuid } from "./utils.js";
 import { documentHash, generateDocument, photoCaption, wrapDocument } from "./documents.js";
 import { collectCase, exportAllBackup, exportCase } from "./exporter.js";
@@ -19,6 +19,7 @@ function shell(content, title = "證跡") {
     <div><span class="offline" id="network-status">${navigator.onLine ? "本機運作中" : "離線運作中"}</span></div></header>
     <main class="app-main"><div class="page-heading">${state.page !== "首頁" ? '<button class="back" data-back>返回</button>' : ""}<h1>${escapeHtml(title)}</h1></div>${content}</main>
     <footer class="app-footer">證跡 v${APP_VERSION}｜資料只保存在此裝置</footer>
+    <div class="privacy-cover" aria-hidden="true"><div><strong>證跡已隱藏</strong><span>返回本程式即可繼續操作</span></div></div>
     <nav class="mobile-tabbar ${["證物採證", "簽署"].includes(state.page) ? "workflow-hidden" : ""}" aria-label="主要功能">
       <button data-go="首頁" class="${state.page === "首頁" ? "active" : ""}"><span>⌂</span>首頁</button>
       <button data-go="案件列表" class="${["案件列表", "案件詳情", "案件摘要"].includes(state.page) ? "active" : ""}"><span>▤</span>案件</button>
@@ -57,6 +58,7 @@ window.addEventListener("popstate", event => {
 
 window.addEventListener("online", () => document.querySelector("#network-status") && (document.querySelector("#network-status").textContent = "本機運作中"));
 window.addEventListener("offline", () => document.querySelector("#network-status") && (document.querySelector("#network-status").textContent = "離線運作中"));
+document.addEventListener("visibilitychange", () => document.body.classList.toggle("privacy-covered", document.hidden));
 
 async function render() {
   try {
@@ -362,6 +364,9 @@ async function renderCaseDetail() {
   const outstanding = bundle.evidence.flatMap(item =>
     validateEvidence(item, bundle.photos.filter(photo => photo.evidenceId === item.id)).map(issue => ({ evidence: item, issue }))
   );
+  const lastBackup = localStorage.getItem(LAST_BACKUP_KEY);
+  const needsBackup = ["已完成", "待簽署", "已簽署"].includes(caseData.status) &&
+    (!lastBackup || new Date(lastBackup) < new Date(caseData.updatedAt));
   shell(`<section class="case-summary panel"><div><span class="badge ${statusClass(caseData.status)}">${caseData.status}</span><h2>${escapeHtml(caseData.name)}</h2>
     <p>${escapeHtml(caseData.reason)}</p><p>${escapeHtml(caseData.address)}</p></div>
     <div class="progress-ring"><strong>${completion}%</strong><span>採證完成度</span></div></section>
@@ -377,6 +382,7 @@ async function renderCaseDetail() {
     </section>
     <section class="action-row"><button id="edit-case">修改案件資料</button><button class="primary" id="add-evidence">新增證物</button>
       <button data-go="案件摘要">產生案件摘要</button><button data-go="文件中心">產生文件</button><button id="export-case">匯出完整案件</button></section>
+    ${needsBackup ? '<section class="notice backup-reminder"><strong>本案件完成後尚未備份</strong><p>建議先匯出完整案件，再進行裝置清理或交接。</p></section>' : ""}
     ${outstanding.length ? `<section class="case-issues panel"><div><span class="badge danger">尚缺 ${outstanding.length} 項</span><div><strong>案件完成前仍有資料需要補齊</strong><small>${escapeHtml(outstanding.slice(0, 3).map(item => `${item.evidence.number} ${item.issue}`).join("、"))}${outstanding.length > 3 ? "…" : ""}</small></div></div>
       <button type="button" data-go="證物採證" data-id="${outstanding[0].evidence.id}">前往第一個缺漏</button></section>` : bundle.evidence.length ? `<section class="case-issues complete panel"><div><span class="badge done">檢查完成</span><div><strong>所有證物必填資料已齊全</strong><small>可繼續產生文件或結束搜索。</small></div></div></section>` : ""}
     <section><div class="section-title"><h2>證物卡片</h2><span>${bundle.evidence.length} 件</span></div>
@@ -431,14 +437,15 @@ async function renderCaseDetail() {
   document.querySelector("#lock-case").onclick = async () => {
     if (!confirm("確定鎖定此案件？鎖定後須先建立新版本才能修改。")) return;
     await put("cases", { ...caseData, status: "已完成", lockedAt: nowIso(), updatedAt: nowIso() });
+    toast("案件已完成並鎖定，請記得匯出備份。");
     renderCaseDetail();
   };
   document.querySelector("#delete-case").onclick = async () => {
-    const confirmation = prompt(`刪除後將移除此案件及其證物、照片、文件與簽名，且無法復原。\n\n請輸入案件名稱「${caseData.name}」確認：`);
+    const confirmation = prompt(`案件將移至「最近刪除」保留30天，期間可完整復原。\n\n請輸入案件名稱「${caseData.name}」確認：`);
     if (confirmation !== caseData.name) return confirmation === null ? undefined : toast("案件名稱不一致，未執行刪除。", "錯誤");
-    if (!confirm("最後確認：確定永久刪除此案件？")) return;
+    if (!confirm("確定將此案件移至最近刪除？")) return;
     await deleteCaseData(caseData.id);
-    toast("案件及其相關資料已刪除。");
+    toast("案件已移至最近刪除，可於30天內復原。");
     navigate("案件列表");
   };
   bindEvidenceSwipe(bundle.evidence);
@@ -686,15 +693,19 @@ async function optionSelect(category, name, value) {
 }
 
 function photoStep(type, photos, evidence, timeKey, label) {
-  const photo = photos.find(item => item.type === type);
-  const source = photo && (photo.preview || photo.original);
-  const sourceUrl = source instanceof Blob ? URL.createObjectURL(source) : source;
-  return `<section class="photo-capture"><h2>${type}</h2>${photo ? `<div class="photo-preview"><img src="${sourceUrl}" alt="${type}">
-    <div><strong>${escapeHtml(photo.fileName)}</strong><span>${Math.round(photo.size / 1024)} 千位元組</span><span>摘要：${photo.hash.slice(0, 16)}…</span>
-    <button type="button" class="danger-button" data-delete-photo="${photo.id}">刪除照片</button></div></div>` : `<div class="camera-placeholder">尚未拍攝</div>`}
+  const typedPhotos = photos.filter(item => item.type === type).sort((a, b) => (a.order || 0) - (b.order || 0));
+  const previews = typedPhotos.map((photo, index) => {
+    const source = photo.preview || photo.original;
+    const sourceUrl = source instanceof Blob ? URL.createObjectURL(source) : source;
+    return `<div class="photo-preview"><img src="${sourceUrl}" alt="${type}第${index + 1}張">
+      <div><strong>第${index + 1}張｜${escapeHtml(photo.fileName)}</strong><span>${Math.round(photo.size / 1024)} 千位元組</span><span>摘要：${photo.hash.slice(0, 16)}…</span>
+      <div class="photo-order-actions"><button type="button" data-photo-up="${photo.id}" ${index === 0 ? "disabled" : ""}>上移</button><button type="button" data-photo-down="${photo.id}" ${index === typedPhotos.length - 1 ? "disabled" : ""}>下移</button></div>
+      <button type="button" class="danger-button" data-delete-photo="${photo.id}">刪除照片</button></div></div>`;
+  }).join("");
+  return `<section class="photo-capture"><div class="section-title"><h2>${type}</h2><span class="badge">${typedPhotos.length} 張</span></div>${previews || `<div class="camera-placeholder">尚未拍攝</div>`}
     <div class="photo-source-actions">
-      <label class="photo-source-button camera-button">${photo ? "重新拍照" : "直接拍照"}<input type="file" accept="image/*" capture="environment" data-photo-type="${type}"></label>
-      <label class="photo-source-button album-button">${photo ? "從相簿更換" : "從相簿選擇"}<input type="file" accept="image/*" data-photo-type="${type}"></label>
+      <label class="photo-source-button camera-button">${typedPhotos.length ? "再拍一張" : "直接拍照"}<input type="file" accept="image/*" capture="environment" data-photo-type="${type}"></label>
+      <label class="photo-source-button album-button">${typedPhotos.length ? "從相簿增加" : "從相簿選擇"}<input type="file" accept="image/*" multiple data-photo-type="${type}"></label>
     </div>
     ${timeKey ? `<div class="time-card"><strong>${label}</strong><span>${rocDateTime(evidence[timeKey])}</span><small>時間來源：${escapeHtml(evidence[timeKey.replace("At", "TimeSource")] || "尚未取得")}</small>
     <div class="time-actions"><button type="button" data-time-now="${timeKey}">使用現在時間</button><button type="button" data-time-edit="${timeKey}">手動修改</button><button type="button" data-time-clear="${timeKey}">清除時間</button></div></div>` : ""}</section>`;
@@ -776,7 +787,22 @@ function bindWizard(evidence, photos, caseData) {
     if (total) total.value = denomination && billCount ? String(denomination * billCount) : "";
   };
   document.querySelectorAll("[name='denomination'],[name='billCount']").forEach(input => input?.addEventListener("input", updateCashTotal));
-  document.querySelectorAll("[data-photo-type]").forEach(input => input.onchange = event => addPhoto(event.target.files[0], event.target.dataset.photoType, evidence, photos));
+  document.querySelectorAll("[data-photo-type]").forEach(input => input.onchange = async event => {
+    for (const file of event.target.files) await addPhoto(file, event.target.dataset.photoType, evidence, photos);
+  });
+  const movePhoto = async (id, direction) => {
+    const photo = photos.find(item => item.id === id);
+    const ordered = photos.filter(item => item.type === photo?.type).sort((a, b) => (a.order || 0) - (b.order || 0));
+    const index = ordered.findIndex(item => item.id === id);
+    const target = ordered[index + direction];
+    if (!photo || !target) return;
+    const currentOrder = photo.order;
+    await put("photos", { ...photo, order: target.order });
+    await put("photos", { ...target, order: currentOrder });
+    renderEvidenceWizard();
+  };
+  document.querySelectorAll("[data-photo-up]").forEach(button => button.onclick = () => movePhoto(button.dataset.photoUp, -1));
+  document.querySelectorAll("[data-photo-down]").forEach(button => button.onclick = () => movePhoto(button.dataset.photoDown, 1));
   document.querySelectorAll("[data-delete-photo]").forEach(button => button.onclick = async () => {
     const photo = photos.find(item => item.id === button.dataset.deletePhoto);
     if (!photo) return;
@@ -788,7 +814,8 @@ function bindWizard(evidence, photos, caseData) {
     }, false);
     await remove("photos", photo.id, evidence.caseId);
     const timeKey = ({ "發現位置照片": "foundAt", "初驗照片": "testAt" })[photo.type];
-    if (timeKey) await put("evidence", { ...evidence, [timeKey]: "", [timeKey.replace("At", "TimeSource")]: "", updatedAt: nowIso() });
+    const remainingSameType = photos.some(item => item.id !== photo.id && item.type === photo.type);
+    if (timeKey && !remainingSameType) await put("evidence", { ...evidence, [timeKey]: "", [timeKey.replace("At", "TimeSource")]: "", updatedAt: nowIso() });
     toast("照片已刪除並留下稽核紀錄。");
     renderEvidenceWizard();
   });
@@ -877,28 +904,17 @@ async function addPhoto(file, type, evidence, existing) {
   const timeSource = fromCamera ? "系統拍攝時間" : file.lastModified ? "檔案最後修改時間" : "系統匯入時間";
   const hash = await sha256(file);
   const preview = await makePreview(file);
-  const old = existing.find(item => item.type === type);
-  let replacementReason = "";
-  if (old) {
-    replacementReason = prompt("請輸入重新拍攝或更換照片的原因：")?.trim() || "";
-    if (!replacementReason) return toast("更換照片必須填寫原因。", "錯誤");
-  }
+  const typePhotos = existing.filter(item => item.type === type);
+  const nextOrder = Math.max(0, ...existing.map(item => Number(item.order) || 0)) + 1;
   const photo = {
-    id: old?.id || uuid(), caseId: evidence.caseId, evidenceId: evidence.id, type, original: file, preview,
+    id: uuid(), caseId: evidence.caseId, evidenceId: evidence.id, type, original: file, preview,
     fileName: file.name || `${type}.jpg`, mime: file.type, size: file.size, width: preview.width, height: preview.height,
-    originalAt: finalAt, importedAt, finalAt, timeSource, caption: old?.caption || "", hash, order: ({ "發現位置照片": 1, "秤重照片": 2, "初驗照片": 3 })[type] || 4,
-    createdAt: old?.createdAt || importedAt,
-    replacementHistory: old ? [...(old.replacementHistory || []), {
-      previousHash: old.hash, previousFileName: old.fileName, replacedAt: importedAt, reason: replacementReason
-    }] : []
+    originalAt: finalAt, importedAt, finalAt, timeSource, caption: "", hash, order: nextOrder,
+    createdAt: importedAt, replacementHistory: []
   };
-  photo.caption = photo.caption || photoCaption(evidence, type, photo.order);
-  if (old) await put("audit", {
-    id: uuid(), caseId: evidence.caseId, action: "重拍取代照片", entity: "photos", entityId: old.id,
-    evidenceId: evidence.id, photoType: type, previousHash: old.hash, newHash: hash,
-    reason: replacementReason, at: importedAt
-  }, false);
+  photo.caption = photoCaption(evidence, type, typePhotos.length + 1);
   await put("photos", photo);
+  existing.push(photo);
   const map = { "發現位置照片": "foundAt", "初驗照片": "testAt" };
   const key = map[type];
   const timeFields = key ? { [key]: finalAt, [key.replace("At", "OriginalAt")]: finalAt, [key.replace("At", "TimeSource")]: timeSource } : {};
@@ -947,6 +963,23 @@ export function validateEvidence(item, photos) {
   if (isDrug && item.testResult && item.testResult !== "未實施初驗" && !item.reagent) issues.push("第四步：有初驗結果但未選初驗試劑");
   if (isDrug && item.testResult && item.testResult !== "未實施初驗" && !has("初驗照片")) issues.push("第四步：有初驗結果但缺少初驗照片");
   if (has("初驗照片") && !item.testAt) issues.push("第四步：有初驗照片但缺少初驗時間");
+  return issues;
+}
+
+export function validateCaseDocuments(caseData, evidence, photos) {
+  const issues = [];
+  if (!caseData?.name) issues.push({ label: "案件名稱未填", page: "案件詳情" });
+  if (!caseData?.suspect) issues.push({ label: "犯罪嫌疑人姓名未填", page: "案件詳情" });
+  if (!caseData?.unit) issues.push({ label: "執行單位未填", page: "案件詳情" });
+  if (!caseData?.address) issues.push({ label: "執行地址未填", page: "案件詳情" });
+  if (!caseData?.searchStart) issues.push({ label: "搜索開始時間未填", page: "案件詳情" });
+  if (!caseData?.searchEnd) issues.push({ label: "搜索結束時間未填", page: "案件詳情" });
+  if (!evidence.length) issues.push({ label: "尚未新增證物", page: "案件詳情" });
+  for (const item of evidence) {
+    for (const issue of validateEvidence(item, photos.filter(photo => photo.evidenceId === item.id))) {
+      issues.push({ label: `${item.number || "未編號"}：${issue}`, page: "證物採證", evidenceId: item.id });
+    }
+  }
   return issues;
 }
 
@@ -1013,15 +1046,24 @@ async function renderCaseSummary() {
 async function renderDocuments() {
   const caseData = await get("cases", state.caseId);
   const { evidence, photos, documents } = await collectCase(state.caseId);
+  const readinessIssues = validateCaseDocuments(caseData, evidence, photos);
   const latestSigned = documents.filter(item => item.type === state.documentType && item.status === "已簽署")
     .sort((a, b) => String(b.signedAt || b.createdAt).localeCompare(String(a.signedAt || a.createdAt)))[0];
   const content = latestSigned ? extractDocumentBody(latestSigned.content) : generateDocument(state.documentType, caseData, evidence, photos);
   const documentStatus = latestSigned ? `已簽署｜第 ${latestSigned.version} 版` : "未簽署工作稿";
   shell(`<label class="document-picker">文件種類<select id="document-type">${documentTypes.map(type => `<option ${type === state.documentType ? "selected" : ""}>${type}</option>`).join("")}</select></label>
     <div class="document-status ${latestSigned ? "signed" : ""}">${documentStatus}</div>
-    <section class="document-actions"><button id="regenerate">重新產生</button><button id="editable-export">匯出可修改文件</button><button id="print-document">列印</button><button id="pdf-export">匯出 PDF</button><button class="primary" data-go="簽署">進入簽署流程</button></section>
+    ${readinessIssues.length ? `<section class="document-readiness panel danger"><div><span class="badge danger">尚缺 ${readinessIssues.length} 項</span><div><h2>正式文件產製前請先補齊</h2><p>${escapeHtml(readinessIssues.slice(0, 4).map(item => item.label).join("、"))}${readinessIssues.length > 4 ? "…" : ""}</p></div></div><button id="fix-document-issue">前往第一個缺漏</button></section>` : '<section class="document-readiness panel complete"><span class="badge done">總檢查完成</span><strong>案件、證物、照片、時間及簽署前資料已齊全。</strong></section>'}
+    <section class="document-actions"><button id="regenerate" ${readinessIssues.length ? "disabled" : ""}>建立正式版本</button><button id="editable-export">匯出可修改工作稿</button><button id="print-document" ${readinessIssues.length ? "disabled" : ""}>列印正式文件</button><button id="pdf-export" ${readinessIssues.length ? "disabled" : ""}>匯出正式 PDF</button><button class="primary" data-go="簽署" ${readinessIssues.length ? "disabled" : ""}>進入簽署流程</button></section>
     <section class="document-preview">${content}</section>`, "文件中心");
   document.querySelector("#document-type").onchange = event => { state.documentType = event.target.value; renderDocuments(); };
+  document.querySelector("#fix-document-issue")?.addEventListener("click", () => {
+    const issue = readinessIssues[0];
+    if (issue.evidenceId) {
+      state.step = issueStep(issue.label.split("：").slice(-1)[0]);
+      navigate("證物採證", issue.evidenceId);
+    } else navigate("案件詳情", caseData.id);
+  });
   document.querySelector("#regenerate").onclick = async () => {
     const button = document.querySelector("#regenerate");
     setButtonBusy(button, "產生中…");
@@ -1172,7 +1214,9 @@ function setupSignaturePad(canvas, onChange = () => {}) {
 function clearSignature(canvas) { canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height); delete canvas.dataset.signed; }
 
 async function renderDataManager() {
+  await purgeExpiredTrash();
   const caseCount = (await getAll("cases")).length;
+  const deletedCases = (await getAll("trash")).sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
   const lastBackup = localStorage.getItem(LAST_BACKUP_KEY);
   shell(`<section class="menu-grid data-menu"><button id="backup-all"><strong>匯出全部案件備份</strong><small>包含案件、照片、文件、簽名及設定</small></button>
     <label class="file-card"><strong>還原全部案件</strong><small>匯入證跡備份檔；可選擇合併或取代</small><input id="restore-all" type="file" accept=".json,application/json"></label>
@@ -1182,7 +1226,10 @@ async function renderDataManager() {
     <section class="panel"><h2>安全提醒</h2><p>備份檔可能包含個人資料、照片與簽名。請存放於受控裝置，不要傳送到未經授權的雲端服務。</p></section>
     <section class="panel app-maintenance"><div><h2>系統維護</h2><p>重新整理不會刪除資料；清除暫存只會移除證跡的離線網頁快取，不會清除案件、照片、文件、簽名或常用設定。</p></div>
       <div class="maintenance-actions"><button id="reload-app">重新整理系統</button><button id="clear-app-cache">清除暫存並重新整理</button></div></section>
-    <section class="panel clear-cases-panel"><div><h2>清除全部案件</h2><p>目前共有 <strong>${caseCount}</strong> 件。只會清除案件、證物、照片、文件、簽名與稽核紀錄；常用選項、人員及地址設定會保留。</p></div>
+    <section class="panel deleted-cases"><div class="section-title"><div><h2>最近刪除</h2><p>案件保留30天，到期後自動永久清除。</p></div><span class="badge ${deletedCases.length ? "warning" : "done"}">${deletedCases.length} 件</span></div>
+      ${deletedCases.length ? `<div class="deleted-case-list">${deletedCases.map(item => `<article><div><strong>${escapeHtml(item.name)}</strong><small>刪除時間：${rocDateTime(item.deletedAt)}｜保留至：${rocDate(item.expiresAt)}</small></div><div><button data-restore-case="${item.id}">復原</button><button class="danger-button" data-purge-case="${item.id}">永久刪除</button></div></article>`).join("")}</div>` : '<p class="empty-inline">沒有最近刪除的案件。</p>'}
+    </section>
+    <section class="panel clear-cases-panel"><div><h2>清除全部案件</h2><p>目前共有 <strong>${caseCount}</strong> 件。會一併清除最近刪除中的案件；常用選項、人員及地址設定會保留。</p></div>
       <button class="danger-button" id="clear-all-cases" ${caseCount ? "" : "disabled"}>一鍵清除案件</button></section>
     <section class="panel version-history"><div class="section-title"><h2>更新紀錄</h2><span class="badge active">v${APP_VERSION}</span></div>
       ${CHANGELOG.map(release => `<details ${release.version === APP_VERSION ? "open" : ""}><summary>v${release.version}｜${release.date}</summary><ul>${release.changes.map(change => `<li>${escapeHtml(change)}</li>`).join("")}</ul></details>`).join("")}
@@ -1200,6 +1247,18 @@ async function renderDataManager() {
     downloadBlob(new Blob([JSON.stringify(data)], { type: "application/json" }), "證跡_常用資料.json");
   };
   document.querySelector("#reload-app").onclick = () => location.reload();
+  document.querySelectorAll("[data-restore-case]").forEach(button => button.onclick = async () => {
+    await restoreCaseData(button.dataset.restoreCase);
+    toast("案件、證物、照片、文件及簽名已完整復原。");
+    await renderDataManager();
+  });
+  document.querySelectorAll("[data-purge-case]").forEach(button => button.onclick = async () => {
+    const item = deletedCases.find(entry => entry.id === button.dataset.purgeCase);
+    if (!item || !confirm(`確定永久刪除「${item.name}」？完成後無法復原。`)) return;
+    await permanentlyDeleteTrash(item.id);
+    toast("案件已永久刪除。");
+    await renderDataManager();
+  });
   document.querySelector("#clear-app-cache").onclick = async event => {
     if (!confirm("確定清除證跡的離線暫存並重新整理？案件及所有正式資料都會保留。")) return;
     const button = event.currentTarget;
@@ -1220,7 +1279,7 @@ async function renderDataManager() {
     }
   };
   document.querySelector("#clear-all-cases").onclick = async () => {
-    if (!confirm(`即將永久清除本裝置內 ${caseCount} 件案件及其證物、照片、文件與簽名。建議先匯出完整備份。是否繼續？`)) return;
+    if (!confirm(`即將永久清除本裝置內 ${caseCount} 件案件、相關資料及最近刪除內容。建議先匯出完整備份。是否繼續？`)) return;
     if (!confirm("最後確認：清除後無法復原，確定清除全部案件？")) return;
     try {
       await clearAllCaseData();
