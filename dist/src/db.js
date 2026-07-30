@@ -3,6 +3,7 @@ import { nowIso, uuid } from "./utils.js";
 const DATABASE_NAME = "證跡第一版資料庫";
 const DATABASE_VERSION = 1;
 const STORES = ["cases", "evidence", "photos", "options", "addresses", "people", "documents", "signatures", "audit"];
+export const CASE_DATA_STORES = ["cases", "evidence", "photos", "documents", "signatures", "audit"];
 let connection;
 
 export function openDatabase() {
@@ -72,6 +73,18 @@ export async function byCase(storeName, caseId) {
 export async function clearStore(storeName) {
   const db = await openDatabase();
   return requestPromise(db.transaction(storeName, "readwrite").objectStore(storeName).clear());
+}
+
+export async function clearAllCaseData() {
+  const db = await openDatabase();
+  const transaction = db.transaction(CASE_DATA_STORES, "readwrite");
+  const completed = new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error || new Error("清除案件失敗。"));
+  });
+  for (const storeName of CASE_DATA_STORES) transaction.objectStore(storeName).clear();
+  await completed;
 }
 
 export async function seedDefaults() {

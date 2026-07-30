@@ -1,4 +1,4 @@
-import { byCase, get, getAll, importDatabase, openDatabase, put, remove, seedDefaults } from "./db.js";
+import { byCase, clearAllCaseData, get, getAll, importDatabase, openDatabase, put, remove, seedDefaults } from "./db.js";
 import { calculateNet, chineseNumber, downloadBlob, escapeHtml, inputToIso, localInputValue, nowIso, rocDateTime, sha256, toast, uuid } from "./utils.js";
 import { documentHash, generateDocument, photoCaption, wrapDocument } from "./documents.js";
 import { collectCase, exportAllBackup, exportCase } from "./exporter.js";
@@ -871,11 +871,14 @@ function setupSignaturePad(canvas) {
 function clearSignature(canvas) { canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height); delete canvas.dataset.signed; }
 
 async function renderDataManager() {
+  const caseCount = (await getAll("cases")).length;
   shell(`<section class="menu-grid data-menu"><button id="backup-all"><strong>匯出全部案件備份</strong><small>包含案件、照片、文件、簽名及設定</small></button>
     <label class="file-card"><strong>還原全部案件</strong><small>匯入證跡備份檔；可選擇合併或取代</small><input id="restore-all" type="file" accept=".json,application/json"></label>
     <label class="file-card"><strong>匯入單一案件備份</strong><small>重複案件識別碼將停止匯入</small><input id="restore-case" type="file" accept=".json,application/json"></label>
     <button id="export-options"><strong>匯出預設選項</strong><small>另存常用選項、人員及地址</small></button></section>
     <section class="panel"><h2>安全提醒</h2><p>備份檔可能包含個人資料、照片與簽名。請存放於受控裝置，不要傳送到未經授權的雲端服務。</p></section>
+    <section class="panel clear-cases-panel"><div><h2>清除全部案件</h2><p>目前共有 <strong>${caseCount}</strong> 件。只會清除案件、證物、照片、文件、簽名與稽核紀錄；常用選項、人員及地址設定會保留。</p></div>
+      <button class="danger-button" id="clear-all-cases" ${caseCount ? "" : "disabled"}>一鍵清除案件</button></section>
     <section class="panel version-history"><div class="section-title"><h2>更新紀錄</h2><span class="badge active">v${APP_VERSION}</span></div>
       ${CHANGELOG.map(release => `<details ${release.version === APP_VERSION ? "open" : ""}><summary>v${release.version}｜${release.date}</summary><ul>${release.changes.map(change => `<li>${escapeHtml(change)}</li>`).join("")}</ul></details>`).join("")}
     </section>`, "備份與還原");
@@ -885,6 +888,20 @@ async function renderDataManager() {
   document.querySelector("#export-options").onclick = async () => {
     const data = { version: 1, options: await getAll("options"), addresses: await getAll("addresses"), people: await getAll("people") };
     downloadBlob(new Blob([JSON.stringify(data)], { type: "application/json" }), "證跡_常用資料.json");
+  };
+  document.querySelector("#clear-all-cases").onclick = async () => {
+    if (!confirm(`即將永久清除本裝置內 ${caseCount} 件案件及其證物、照片、文件與簽名。建議先匯出完整備份。是否繼續？`)) return;
+    if (!confirm("最後確認：清除後無法復原，確定清除全部案件？")) return;
+    try {
+      await clearAllCaseData();
+      localStorage.removeItem(CASE_DRAFT_KEY);
+      state.caseId = "";
+      state.evidenceId = "";
+      toast(`已清除 ${caseCount} 件案件；常用選項、人員及地址設定已保留。`);
+      await renderDataManager();
+    } catch (error) {
+      toast(`無法清除案件：${error.message}`, "錯誤");
+    }
   };
 }
 
