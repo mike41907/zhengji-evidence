@@ -1,6 +1,16 @@
-export const APP_VERSION = "1.8.0";
+export const APP_VERSION = "1.9.0";
 
 export const CHANGELOG = [
+  {
+    version: "1.9.0",
+    date: "2026-07-30",
+    changes: [
+      "加入頁面轉場、按壓回饋、載入狀態及即時欄位提示。",
+      "優化手機文件中心固定操作區與 iPhone 安全區。",
+      "新增列印及匯出 PDF 操作，並使用 A4 正式文件樣式。",
+      "支援系統減少動態效果設定，兼顧使用舒適度。"
+    ]
+  },
   {
     version: "1.8.0",
     date: "2026-07-30",

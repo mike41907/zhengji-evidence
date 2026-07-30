@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateDocument } from "../src/documents.js";
+import { generateDocument, wrapDocument } from "../src/documents.js";
 
 test("扣押物品目錄表符合正式欄位與最少十一列", () => {
   const html = generateDocument("扣押物品目錄表", {
@@ -30,4 +30,12 @@ test("搜索扣押筆錄產生三頁正式範本", () => {
   assert.match(html, /執行經過情形/);
   assert.match(html, /受執行人簽名捺印/);
   assert.equal((html.match(/search-record-page/g) || []).length, 3);
+});
+
+test("列印文件使用 A4 PDF 版面與正式文件樣式", () => {
+  const html = wrapDocument('<article class="document search-record-page">內容</article>');
+  assert.match(html, /@page\{size:A4 portrait;margin:12mm\}/);
+  assert.match(html, /\.search-record-page/);
+  assert.match(html, /\.seizure-inventory/);
+  assert.match(html, /break-after:page/);
 });
