@@ -1,6 +1,15 @@
-export const APP_VERSION = "1.9.4";
+export const APP_VERSION = "1.9.5";
 
 export const CHANGELOG = [
+  {
+    version: "1.9.5",
+    date: "2026-07-30",
+    changes: [
+      "修正 iPhone 點選輸入框時畫面自動放大的問題。",
+      "手機版所有輸入框、下拉選單、日期欄位與文字區統一使用至少 16px 字級。",
+      "保留使用者手動縮放與無障礙操作能力。"
+    ]
+  },
   {
     version: "1.9.4",
     date: "2026-07-30",
