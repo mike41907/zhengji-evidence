@@ -1,6 +1,14 @@
-export const APP_VERSION = "1.1.0";
+export const APP_VERSION = "1.1.1";
 
 export const CHANGELOG = [
+  {
+    version: "1.1.1",
+    date: "2026-07-30",
+    changes: [
+      "修正 iPhone 證物採證頁底部按鈕被主選單遮住。",
+      "採證流程中隱藏主選單，固定顯示上一步、儲存及確認並下一步。"
+    ]
+  },
   {
     version: "1.1.0",
     date: "2026-07-30",

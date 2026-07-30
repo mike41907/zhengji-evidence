@@ -16,7 +16,7 @@ function shell(content, title = "證跡") {
     <div><span class="offline" id="network-status">${navigator.onLine ? "本機運作中" : "離線運作中"}</span></div></header>
     <main><div class="page-heading">${state.page !== "首頁" ? '<button class="back" data-back>返回</button>' : ""}<h1>${escapeHtml(title)}</h1></div>${content}</main>
     <footer class="app-footer">證跡 v${APP_VERSION}｜資料只保存在此裝置</footer>
-    <nav class="mobile-tabbar" aria-label="主要功能">
+    <nav class="mobile-tabbar ${["證物採證", "簽署"].includes(state.page) ? "workflow-hidden" : ""}" aria-label="主要功能">
       <button data-go="首頁" class="${state.page === "首頁" ? "active" : ""}"><span>⌂</span>首頁</button>
       <button data-go="案件列表" class="${["案件列表", "案件詳情", "案件摘要"].includes(state.page) ? "active" : ""}"><span>▤</span>案件</button>
       <button data-go="新增案件" class="${state.page === "新增案件" ? "active primary-tab" : "primary-tab"}"><span>＋</span>新增</button>
