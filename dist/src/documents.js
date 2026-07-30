@@ -1,4 +1,4 @@
-import { escapeHtml, rocDateTime, sha256 } from "./utils.js";
+import { escapeHtml, rocDate, rocDateTime, sha256 } from "./utils.js";
 
 const table = rows => `<table>${rows.map(([key, value]) =>
   `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(value ?? "")}</td></tr>`).join("")}</table>`;
@@ -91,7 +91,7 @@ function searchSeizureRecord(caseData, evidenceList, options, draft) {
         <tr><th rowspan="7">受執行人</th><td>身分　${["受搜索人","扣押物所有人","扣押物持有人","扣押物保管人"].map(role => `${mark(caseData.suspectRole === role)}${role}`).join("　")}</td></tr>
         <tr><td>姓名　${line(caseData.suspect)}</td></tr>
         <tr><td>性別　${line(caseData.suspectGender)}</td></tr>
-        <tr><td>出生年月日　${line(caseData.suspectBirthDate)}</td></tr>
+        <tr><td>出生年月日　${line(caseData.suspectBirthDate ? rocDate(caseData.suspectBirthDate) : "")}</td></tr>
         <tr><td>身分證統一編號　${line(caseData.suspectId)}</td></tr>
         <tr><td>住居所　${line(caseData.suspectResidence || caseData.suspectRegisteredAddress)}</td></tr>
         <tr><td>是否在場　${line(caseData.suspectPresent || "是")}</td></tr>

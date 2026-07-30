@@ -1,5 +1,5 @@
 import { byCase, clearAllCaseData, deleteCaseData, deleteEvidenceData, get, getAll, importDatabase, openDatabase, put, remove, seedDefaults } from "./db.js";
-import { adjacentEvidenceStep, chineseNumber, cloneEvidenceSettings, downloadBlob, escapeHtml, evidenceLocationDefaults, inputToIso, localInputValue, nowIso, rocDateTime, sha256, toast, uuid } from "./utils.js";
+import { adjacentEvidenceStep, chineseNumber, cloneEvidenceSettings, dateInputValue, downloadBlob, escapeHtml, evidenceLocationDefaults, inputToIso, localInputValue, nowIso, rocDate, rocDateTime, sha256, toast, uuid } from "./utils.js";
 import { documentHash, generateDocument, photoCaption, wrapDocument } from "./documents.js";
 import { collectCase, exportAllBackup, exportCase } from "./exporter.js";
 import { DEFAULT_SUMMARY_TEMPLATE, renderSummary, SUMMARY_FIELDS, summaryValues, unknownSummaryFields } from "./summary.js";
@@ -169,7 +169,7 @@ async function renderCaseForm(existing) {
       ${field("犯罪嫌疑人姓名", "suspect", data.suspect, true)}${field("執行單位", "unit", data.unit, true)}
       ${selectField("受執行人身分", "suspectRole", ["受搜索人", "扣押物所有人", "扣押物持有人", "扣押物保管人"], data.suspectRole)}
       ${selectField("性別", "suspectGender", ["", "男", "女", "其他"], data.suspectGender)}
-      ${field("出生年月日", "suspectBirthDate", data.suspectBirthDate, false, "例如80年1月1日")}
+      ${dateOnlyField("出生年月日", "suspectBirthDate", data.suspectBirthDate)}
       ${field("身分證統一編號", "suspectId", data.suspectId)}
       ${dateField("搜索開始時間", "searchStart", data.searchStart)}
       <div class="case-form-review"><strong>搜索結束時間</strong><p>完成現場搜索後，再到案件詳情按「結束搜索」記錄。</p></div>
@@ -347,6 +347,9 @@ function field(label, name, value = "", required = false, placeholder = "") {
 function dateField(label, name, value) {
   return `<label>${label}<input type="datetime-local" name="${name}" value="${localInputValue(value)}"><small>${value ? rocDateTime(value) : "尚未設定"}</small></label>`;
 }
+function dateOnlyField(label, name, value) {
+  return `<label>${label}<input type="date" name="${name}" value="${dateInputValue(value)}"><small>${value ? rocDate(value) : "點選即可選擇年、月、日"}</small></label>`;
+}
 function selectField(label, name, options, value) {
   return `<label>${label}<select name="${name}">${options.map(item => `<option ${item === value ? "selected" : ""}>${escapeHtml(item)}</option>`).join("")}</select></label>`;
 }
@@ -408,12 +411,10 @@ async function renderCaseDetail() {
     renderCaseDetail();
   });
   document.querySelector("#edit-search-time")?.addEventListener("click", async () => {
-    const startValue = prompt("搜索開始時間（年-月-日 時:分）", localInputValue(caseData.searchStart).replace("T", " "));
-    if (startValue === null) return;
-    const endValue = prompt("搜索結束時間（尚未結束請留空）", localInputValue(caseData.searchEnd).replace("T", " "));
-    if (endValue === null) return;
-    const searchStart = inputToIso(startValue);
-    const searchEnd = inputToIso(endValue);
+    const selected = await chooseSearchTimes(caseData);
+    if (!selected) return;
+    const searchStart = inputToIso(selected.searchStart);
+    const searchEnd = inputToIso(selected.searchEnd);
     if (searchEnd && new Date(searchEnd) < new Date(searchStart)) return toast("搜索結束時間不得早於開始時間。", "錯誤");
     await put("cases", { ...caseData, searchStart, searchEnd, updatedAt: nowIso() });
     toast("搜索時間已更新。");
@@ -441,6 +442,34 @@ async function renderCaseDetail() {
     navigate("案件列表");
   };
   bindEvidenceSwipe(bundle.evidence);
+}
+
+function chooseSearchTimes(caseData) {
+  return new Promise(resolve => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "evidence-category-dialog time-picker-dialog";
+    dialog.innerHTML = `<form method="dialog">
+      <div class="dialog-heading"><div><p class="eyebrow dark">案件時間</p><h2>選擇搜索時間</h2></div></div>
+      <label>搜索開始時間<input type="datetime-local" id="edit-search-start" value="${localInputValue(caseData.searchStart)}" required></label>
+      <label>搜索結束時間<input type="datetime-local" id="edit-search-end" value="${localInputValue(caseData.searchEnd)}"><small>搜索尚未結束可留空</small></label>
+      <div class="dialog-actions"><button value="cancel">取消</button><button class="primary" id="confirm-search-times" value="default">儲存時間</button></div>
+    </form>`;
+    document.body.append(dialog);
+    let selected = null;
+    dialog.querySelector("#confirm-search-times").onclick = event => {
+      const start = dialog.querySelector("#edit-search-start");
+      if (!start.reportValidity()) {
+        event.preventDefault();
+        return;
+      }
+      selected = { searchStart: start.value, searchEnd: dialog.querySelector("#edit-search-end").value };
+    };
+    dialog.onclose = () => {
+      dialog.remove();
+      resolve(selected);
+    };
+    dialog.showModal();
+  });
 }
 
 async function evidenceCards(items) {

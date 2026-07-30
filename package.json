@@ -1,7 +1,7 @@
 {
   "name": "evidence-trace",
   "private": true,
-  "version": "1.14.0",
+  "version": "1.15.0",
   "type": "module",
   "scripts": {
     "start": "node tools/server.mjs",

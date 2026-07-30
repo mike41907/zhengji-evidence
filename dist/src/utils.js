@@ -18,13 +18,35 @@ export function rocDateTime(value) {
 
 export function rocDate(value) {
   if (!value) return "尚未設定";
+  const rocMatch = String(value).match(/^(\d{2,3})年(\d{1,2})月(\d{1,2})日$/);
+  if (rocMatch) {
+    return `${Number(rocMatch[1])}年${String(Number(rocMatch[2])).padStart(2, "0")}月${String(Number(rocMatch[3])).padStart(2, "0")}日`;
+  }
   const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "日期格式錯誤";
   const formatter = new Intl.DateTimeFormat("zh-TW", {
     timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit"
   });
   const parts = formatter.formatToParts(date);
   const get = type => parts.find(part => part.type === type)?.value ?? "00";
   return `${Number(get("year")) - 1911}年${get("month")}月${get("day")}日`;
+}
+
+export function dateInputValue(value) {
+  if (!value) return "";
+  const text = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const rocMatch = text.match(/^(\d{2,3})年(\d{1,2})月(\d{1,2})日$/);
+  if (rocMatch) {
+    const year = Number(rocMatch[1]) + 1911;
+    const month = String(Number(rocMatch[2])).padStart(2, "0");
+    const day = String(Number(rocMatch[3])).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return "";
+  const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return shifted.toISOString().slice(0, 10);
 }
 
 export function localInputValue(value) {

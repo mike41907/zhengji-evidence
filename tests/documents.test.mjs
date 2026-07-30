@@ -19,7 +19,7 @@ test("扣押物品目錄表符合正式欄位與最少十一列", () => {
 
 test("搜索扣押筆錄產生三頁正式範本", () => {
   const html = generateDocument("搜索扣押筆錄", {
-    agencyName: "彰化縣警察局彰化分局", suspect: "王小明", suspectRole: "受搜索人",
+    agencyName: "彰化縣警察局彰化分局", suspect: "王小明", suspectRole: "受搜索人", suspectBirthDate: "1991-01-02",
     searchLegalBasis: "出示搜索票", warrantNumber: "115年度聲搜字第1號",
     address: "彰化縣彰化市測試路1號", searchStart: "2026-07-30T01:00:00Z",
     searchEnd: "2026-07-30T02:00:00Z", executors: "陳員警", recorder: "林員警"
@@ -29,6 +29,7 @@ test("搜索扣押筆錄產生三頁正式範本", () => {
   assert.match(html, /執行時告知事項/);
   assert.match(html, /執行經過情形/);
   assert.match(html, /受執行人簽名捺印/);
+  assert.match(html, /出生年月日　80年01月02日/);
   assert.equal((html.match(/search-record-page/g) || []).length, 3);
 });
 

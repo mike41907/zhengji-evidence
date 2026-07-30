@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { adjacentEvidenceStep, chineseNumber, cloneEvidenceSettings, evidenceLocationDefaults, rocDateTime, safeFileName } from "../src/utils.js";
+import { adjacentEvidenceStep, chineseNumber, cloneEvidenceSettings, dateInputValue, evidenceLocationDefaults, rocDate, rocDateTime, safeFileName } from "../src/utils.js";
 test("民國日期時間格式一致", () => assert.match(rocDateTime("2026-07-29T04:05:06Z"), /^\d{3}年\d{2}月\d{2}日\d{2}時\d{2}分\d{2}秒$/));
+test("日期選擇器支援舊民國日期並輸出正式格式", () => {
+  assert.equal(dateInputValue("80年1月2日"), "1991-01-02");
+  assert.equal(dateInputValue("1991-01-02"), "1991-01-02");
+  assert.equal(rocDate("1991-01-02"), "80年01月02日");
+});
 test("中文序號正確", () => { assert.equal(chineseNumber(1), "一"); assert.equal(chineseNumber(12), "十二"); assert.equal(chineseNumber(20), "二十"); });
 test("檔名會移除不允許字元", () => assert.equal(safeFileName('案:號/一?'), "案＿號＿一＿"));
 test("複製證物設定不會帶入個別採證資料", () => {
