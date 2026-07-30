@@ -1,6 +1,15 @@
-export const APP_VERSION = "1.9.0";
+export const APP_VERSION = "1.9.1";
 
 export const CHANGELOG = [
+  {
+    version: "1.9.1",
+    date: "2026-07-30",
+    changes: [
+      "修正手機新增證物按下一步時缺少反應的問題。",
+      "證物步驟切換加入儲存中狀態、重複點擊防護及錯誤提示。",
+      "強化底部證物操作列的觸控與舊版 iPhone 相容性。"
+    ]
+  },
   {
     version: "1.9.0",
     date: "2026-07-30",

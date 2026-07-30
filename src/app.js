@@ -487,12 +487,13 @@ async function renderEvidenceWizard() {
   shell(`<section class="wizard-head"><div><span class="evidence-number">${escapeHtml(evidence.number)}</span><h2>${escapeHtml(evidence.name)}</h2></div>
     <div class="stepper">${stepNames.map((name, index) => `<button class="${state.step === index + 1 ? "current" : state.step > index + 1 ? "complete" : ""}" data-step="${index + 1}"><span>${index + 1}</span><small>${name}</small></button>`).join("")}</div></section>
     <section id="wizard-content" class="panel">${await wizardStep(state.step, evidence, photos, caseData)}</section>
-    <nav class="wizard-nav"><button id="previous-step" ${state.step === 1 ? "disabled" : ""}>上一步</button><button id="save-step">儲存</button>
-      <button class="primary" id="next-step">${state.step === 5 ? "返回案件" : "確認並下一步"}</button></nav>`, "證物採證");
+    <nav class="wizard-nav"><button type="button" id="previous-step" ${state.step === 1 ? "disabled" : ""}>上一步</button><button type="button" id="save-step">儲存</button>
+      <button type="button" class="primary" id="next-step">${state.step === 5 ? "返回案件" : "確認並下一步"}</button></nav>`, "證物採證");
   bindWizard(evidence, photos, caseData);
 }
 
 async function wizardStep(step, evidence, photos, caseData) {
+  const isDrug = (evidence.evidenceCategory || "毒品") === "毒品";
   if (step === 1) return photoStep("發現位置照片", photos, evidence, "foundAt", "查獲時間") + `
     <h3>發現位置快速組合</h3><div class="form-grid">${await optionSelect("空間位置", "space", evidence.space)}${await optionSelect("具體位置", "exactLocation", evidence.exactLocation)}
     ${await optionSelect("位置補充", "positionExtra", evidence.positionExtra)}<label class="wide">完整位置說明<textarea name="locationText">${escapeHtml(evidence.locationText)}</textarea></label></div>`;
@@ -557,14 +558,60 @@ function photoStep(type, photos, evidence, timeKey, label) {
 }
 
 function bindWizard(evidence, photos, caseData) {
-  document.querySelectorAll("[data-step]").forEach(button => button.onclick = async () => { await saveWizard(evidence); state.step = Number(button.dataset.step); renderEvidenceWizard(); });
-  document.querySelector("#previous-step").onclick = async () => { await saveWizard(evidence); state.step -= 1; renderEvidenceWizard(); };
-  document.querySelector("#save-step").onclick = async () => { await saveWizard(evidence); toast("本步驟已儲存。"); };
-  document.querySelector("#next-step").onclick = async () => {
+  const runWizardAction = async (button, task) => {
+    if (button.dataset.busy === "true") return;
+    const navButtons = [...document.querySelectorAll(".wizard-nav button")];
+    button.dataset.busy = "true";
+    setButtonBusy(button, "儲存中…");
+    navButtons.filter(item => item !== button).forEach(item => item.disabled = true);
+    try {
+      await task();
+    } catch (error) {
+      toast(`無法儲存證物：${error.message}`, "錯誤");
+      restoreButton(button);
+      navButtons.forEach(item => item.disabled = item.id === "previous-step" && state.step === 1);
+      delete button.dataset.busy;
+    }
+  };
+  document.querySelectorAll("[data-step]").forEach(button => button.onclick = async () => {
+    const previousStep = state.step;
+    try {
+      const saved = await saveWizard(evidence);
+      if (!saved) return;
+      state.step = Number(button.dataset.step);
+      await renderEvidenceWizard();
+    } catch (error) {
+      state.step = previousStep;
+      toast(`無法切換步驟：${error.message}`, "錯誤");
+    }
+  });
+  document.querySelector("#previous-step").onclick = event => runWizardAction(event.currentTarget, async () => {
     const saved = await saveWizard(evidence);
-    if (!saved) return;
-    if (state.step === 5) return navigate("案件詳情", evidence.caseId);
-    state.step += 1; renderEvidenceWizard();
+    if (!saved) throw new Error("請先修正目前資料。");
+    const previousStep = state.step;
+    state.step -= 1;
+    try { await renderEvidenceWizard(); }
+    catch (error) { state.step = previousStep; throw error; }
+  });
+  document.querySelector("#save-step").onclick = event => runWizardAction(event.currentTarget, async () => {
+    const saved = await saveWizard(evidence);
+    if (!saved) throw new Error("請先修正目前資料。");
+    toast("本步驟已儲存。");
+    restoreButton(event.currentTarget);
+    document.querySelectorAll(".wizard-nav button").forEach(item => item.disabled = item.id === "previous-step" && state.step === 1);
+    delete event.currentTarget.dataset.busy;
+  });
+  document.querySelector("#next-step").onclick = async () => {
+    const button = document.querySelector("#next-step");
+    await runWizardAction(button, async () => {
+      const saved = await saveWizard(evidence);
+      if (!saved) throw new Error("請先修正目前資料。");
+      if (state.step === 5) return navigate("案件詳情", evidence.caseId);
+      const previousStep = state.step;
+      state.step += 1;
+      try { await renderEvidenceWizard(); }
+      catch (error) { state.step = previousStep; throw error; }
+    });
   };
   document.querySelectorAll("[data-quantity]").forEach(button => button.onclick = () => {
     document.querySelector("[name='quantity']").value = button.dataset.quantity;
