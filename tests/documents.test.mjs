@@ -24,7 +24,7 @@ test("搜索扣押筆錄產生三頁正式範本", () => {
     address: "彰化縣彰化市測試路1號", searchStart: "2026-07-30T01:00:00Z",
     searchEnd: "2026-07-30T02:00:00Z", executors: "陳員警", recorder: "林員警"
   }, [{ evidenceCategory: "手機", name: "手機", quantity: "1", quantityUnit: "支" }], []);
-  assert.match(html, /附錄一、搜索筆錄範本/);
+  assert.match(html, /搜索扣押筆錄/);
   assert.match(html, /執行之依據/);
   assert.match(html, /執行時告知事項/);
   assert.match(html, /執行經過情形/);
@@ -55,9 +55,56 @@ test("毒品文件與照片說明只使用含包裝毛重", () => {
     number: "證一", evidenceCategory: "毒品", name: "疑似毒品", quantity: "1", quantityUnit: "包",
     grossWeight: "10.25", packageWeight: "1.00", netWeight: "9.25", weightUnit: "公克"
   };
-  const html = generateDocument("毒品初步檢驗紀錄表", { suspect: "王小明" }, [evidence], []);
-  assert.match(html, /毛重（含包裝）/);
+  const html = generateDocument("毒品初步鑑驗報告單", { suspect: "王小明" }, [evidence], []);
+  assert.match(html, /毛重10\.25公克/);
   assert.doesNotMatch(html, /包裝重量/);
   assert.doesNotMatch(html, /淨重/);
   assert.match(photoCaption(evidence, "秤重照片"), /連同包裝.*毛重10.25公克/);
+});
+
+test("正確的毒品初步鑑驗報告單會整合多筆毒品證物", () => {
+  const html = generateDocument("毒品初步鑑驗報告單", {
+    agencyName: "內政部警政署航空警察局臺北分局",
+    unit: "偵查隊",
+    suspect: "王小明",
+    tester: "偵查佐 測試員",
+    address: "臺北市測試區"
+  }, [{
+    evidenceCategory: "毒品",
+    number: "證物一",
+    drugType: "疑似第二級毒品安非他命",
+    quantity: "1",
+    quantityUnit: "包",
+    grossWeight: "32.92",
+    weightUnit: "公克",
+    foundAt: "2026-07-21T02:00:00Z",
+    testAt: "2026-07-21T02:25:00Z",
+    reagent: "拉曼光譜檢測儀",
+    testResult: "呈安非他命反應"
+  }, {
+    evidenceCategory: "毒品",
+    number: "證物二",
+    drugType: "疑似第二級毒品安非他命",
+    quantity: "1",
+    quantityUnit: "包",
+    grossWeight: "1.04",
+    weightUnit: "公克"
+  }], []);
+  assert.match(html, /毒品初步鑑驗報告單/);
+  assert.match(html, /案類/);
+  assert.match(html, /☑安非他命/);
+  assert.match(html, /一、扣押物目錄編號：證物一/);
+  assert.match(html, /二、扣押物目錄編號：證物二/);
+  assert.match(html, /毛重32\.92公克/);
+  assert.match(html, /涉嫌人簽章/);
+});
+
+test("搜索扣押筆錄採用正式名稱及完整扣押法源選項", () => {
+  const html = generateDocument("搜索扣押筆錄", {
+    agencyName: "內政部警政署航空警察局臺北分局",
+    searchLegalBasis: "附帶扣押"
+  }, [], []);
+  assert.match(html, /<h1>搜索扣押筆錄<\/h1>/);
+  assert.match(html, /刑事訴訟法第一百三十七條執行附帶扣押/);
+  assert.doesNotMatch(html, /附錄一、搜索筆錄範本/);
 });
