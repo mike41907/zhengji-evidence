@@ -2,7 +2,7 @@ import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 const output = "dist";
 await rm(output, { recursive:true, force:true });
 await mkdir(output, { recursive:true });
-for (const path of ["index.html","manifest.webmanifest","service-worker.js","icons","src","vendor","docs","README.md","CHANGELOG.md"]) await cp(path, `${output}/${path}`, { recursive:true });
+for (const path of [".openai","index.html","manifest.webmanifest","service-worker.js","icons","src","vendor","docs","README.md","CHANGELOG.md"]) await cp(path, `${output}/${path}`, { recursive:true });
 await mkdir(`${output}/server`, { recursive:true });
 const publicFiles = {
   "/index.html": ["index.html", "text/html; charset=utf-8"],
