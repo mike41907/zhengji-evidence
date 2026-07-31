@@ -8,7 +8,7 @@ import { APP_VERSION, CHANGELOG } from "./version.js";
 
 const app = document.querySelector("#app");
 const state = { page: "首頁", caseId: "", evidenceId: "", step: 1, documentType: "搜索扣押筆錄", previewRead: false };
-const documentTypes = ["搜索扣押筆錄", "毒品初步檢驗紀錄表", "證物照片紀錄", "扣押物品目錄表"];
+const documentTypes = ["搜索扣押筆錄", "毒品初步鑑驗報告單", "證物照片紀錄", "扣押物品目錄表"];
 const statuses = ["草稿", "採證中", "已完成", "待簽署", "已簽署", "已作廢"];
 const CASE_DRAFT_KEY = "證跡_新增案件草稿";
 const LAST_BACKUP_KEY = "證跡_最後完整備份";

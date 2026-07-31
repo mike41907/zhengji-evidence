@@ -23,17 +23,9 @@ export function generateDocument(type, caseData, evidenceList, photos, options =
   let body = "";
   if (type === "搜索扣押筆錄") {
     body = searchSeizureRecord(caseData, evidenceList, options, draft);
-  } else if (type === "毒品初步檢驗紀錄表") {
+  } else if (type === "毒品初步鑑驗報告單" || type === "毒品初步檢驗紀錄表") {
     const drugEvidence = evidenceList.filter(item => (item.evidenceCategory || "毒品") === "毒品");
-    body = drugEvidence.map(item => heading(type, caseData, draft) + table([
-      ["犯罪嫌疑人", caseData.suspect],
-      ["查獲日期時間", rocDateTime(item.foundAt)], ["查獲地點", `${caseData.address || ""}${item.locationText || ""}`],
-      ["證物編號", item.number], ["證物名稱", item.name], ["外觀", item.appearance], ["顏色", item.color],
-      ["包裝方式", item.packaging], ["數量", `${item.quantity || ""}${item.quantityUnit || ""}`],
-      ["毛重（含包裝）", `${item.grossWeight || ""}${item.weightUnit || ""}`], ["初驗試劑", item.reagent],
-      ["初驗結果", item.testResult], ["反應情形", item.reaction],
-      ["初驗時間", rocDateTime(item.testAt)], ["初驗人員", caseData.tester]
-    ]) + signatureArea(options)).join('<div class="page-break"></div>') || heading(type, caseData, draft) + "<p>本案件尚無毒品類證物。</p>";
+    body = drugPreliminaryReport(caseData, drugEvidence, options, draft);
   } else if (type === "證物照片紀錄") {
     let sequence = 0;
     const cards = photos.sort((a, b) => (a.order || 0) - (b.order || 0)).map(photo => {
@@ -65,13 +57,82 @@ const line = value => escapeHtml(value || "　　　　　　　　　");
 function legalBasisOptions(caseData) {
   const selected = caseData.searchLegalBasis || "";
   return [
-    ["出示搜索票", `出示搜索票（${caseData.warrantNumber ? `字號：${escapeHtml(caseData.warrantNumber)}` : "搜索票字號留存於卷內"}）`],
+    ["出示搜索票", `出示搜索票實施之。${caseData.warrantNumber ? `（${escapeHtml(caseData.warrantNumber)}）` : "（搜索票字號留存於卷內）"}`],
     ["附帶搜索", "依刑事訴訟法第一百三十條執行附帶搜索。"],
-    ["逕行搜索", "依刑事訴訟法第一百三十一條第一項執行逕行搜索。"],
-    ["緊急搜索", "依刑事訴訟法第一百三十一條第二項執行緊急搜索。"],
-    ["同意搜索", "依刑事訴訟法第一百三十一條之一，經受搜索人同意執行搜索。"],
-    ["其他", "其他依法得執行搜索之依據。"]
+    ["逕行搜索", "依刑事訴訟法第一百三十一條第一項執行逕行搜索。理由說明如下："],
+    ["檢察官指揮逕行搜索", "依檢察官之指揮執行逕行搜索。"],
+    ["同意搜索", "依刑事訴訟法第一百三十一條之一經受搜索人同意執行搜索。"],
+    ["出示扣押裁定", "出示扣押裁定實施之。"],
+    ["檢察官指揮逕行扣押", "依檢察官之指揮實施逕行扣押。"],
+    ["保全追徵扣押", "依刑事訴訟法第一百三十三條第二項執行保全追徵扣押。"],
+    ["命提出扣押", "依刑事訴訟法第一百三十三條第三項命所有人、持有人或保管人提出或交付應扣押物予以扣押。"],
+    ["同意扣押", "依刑事訴訟法第一百三十三條之一經受扣押人同意執行扣押。"],
+    ["逕行扣押", "依刑事訴訟法第一百三十三條之二第三項執行逕行扣押。"],
+    ["附帶扣押", "係本案應扣押之物為搜索票未記載，依刑事訴訟法第一百三十七條執行附帶扣押。"],
+    ["現場遺留物扣押", "依刑事訴訟法第一百四十三條前段就被告、犯罪嫌疑人或第三人遺留在犯罪現場之物予以扣押。"],
+    ["任意提出物扣押", "依刑事訴訟法第一百四十三條後段就所有人或保管人任意提出或交付之物予以扣押。"],
+    ["另案扣押", "係另案應扣押之物，依刑事訴訟法第一百五十二條執行另案扣押。"],
+    ["其他", "其他依法得執行搜索或扣押之事由。"]
   ].map(([value, label]) => `<p>${mark(selected === value)} ${label}</p>`).join("");
+}
+
+const chineseSequence = index => ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"][index] || String(index + 1);
+
+function drugCaseType(drugEvidence) {
+  const text = drugEvidence.map(item => `${item.drugType || ""}${item.name || ""}${item.testResult || ""}`).join(" ");
+  return [
+    ["嗎啡、海洛因", /嗎啡|海洛因/],
+    ["安非他命", /安非他命/],
+    ["愷他命", /愷他命|K他命|Ketamine/i]
+  ].map(([label, pattern]) => `${mark(pattern.test(text))}${label}`).join("　");
+}
+
+function drugPreliminaryReport(caseData, drugEvidence, options, draft) {
+  const agency = caseData.agencyName || caseData.unit || "內政部警政署航空警察局臺北分局";
+  const unit = caseData.unit || "偵查隊";
+  const foundEntries = drugEvidence.map(item =>
+    `${rocDateTime(item.foundAt)}　${item.foundAddress || caseData.address || ""}${item.locationText ? `　${item.locationText}` : ""}`
+  ).filter(value => value.trim()).join("<br>");
+  const testEntries = drugEvidence.map(item =>
+    `${rocDateTime(item.testAt)}　${item.foundAddress || caseData.address || ""}`
+  ).filter(value => value.trim()).join("<br>");
+  const evidenceEntries = drugEvidence.map((item, index) => {
+    const name = item.drugType || item.name || "疑似毒品";
+    const quantity = `${item.quantity || ""}${item.quantityUnit || ""}`;
+    const weight = `${item.grossWeight || ""}${item.weightUnit || ""}`;
+    return `<p><strong>${chineseSequence(index)}、扣押物目錄編號：${escapeHtml(item.number || "")}</strong><br>
+      種類：${escapeHtml(name)}　數量：${escapeHtml(quantity)}　重量：毛重${escapeHtml(weight)}</p>`;
+  }).join("") || "<p>目前沒有毒品證物。</p>";
+  const reagent = drugEvidence.map(item => item.reagent).find(Boolean) || "拉曼光譜檢測儀";
+  const resultText = drugEvidence.map(item => `${item.testResult || ""}${item.reaction || ""}`).join(" ");
+  const reactionOptions = [
+    ["嗎啡、海洛因", /嗎啡|海洛因/],
+    ["安非他命", /安非他命/],
+    ["潘他唑新", /潘他唑新/],
+    ["愷他命", /愷他命|K他命|Ketamine/i]
+  ].map(([label, pattern]) => `${mark(pattern.test(resultText))}呈${label}反應。`).join("　");
+  const signer = options.signature
+    ? `<img src="${options.signature}" alt="涉嫌人簽章"><span>${escapeHtml(options.signerName || caseData.suspect)}</span>`
+    : "____________________________";
+  return `<article class="document drug-preliminary-report">
+    ${draft ? '<div class="watermark">未簽署工作稿</div>' : ""}
+    <header><h1>${escapeHtml(agency.replace(/^內政部警政署/, ""))}查獲涉嫌毒品危害防制條例<br>毒品初步鑑驗報告單</h1></header>
+    <table class="drug-report-table">
+      <tbody>
+        <tr><th>案類</th><td>${drugCaseType(drugEvidence)}</td><th>涉嫌人</th><td>${escapeHtml(caseData.suspect || "")}</td></tr>
+        <tr><th>查獲時間地點</th><td colspan="3">${foundEntries || "—"}</td></tr>
+        <tr><th>初步鑑驗單位</th><td>${escapeHtml(unit)}</td><th>職別姓名</th><td>${escapeHtml(caseData.tester || "")}</td></tr>
+        <tr><th>鑑驗時間地點</th><td colspan="3">${testEntries || "—"}</td></tr>
+        <tr><th>鑑驗物品及數量</th><td colspan="3" class="drug-items">${evidenceEntries}</td></tr>
+        <tr><th>初步鑑驗結果</th><td colspan="3">
+          <p>經本單位依 ${escapeHtml(reagent)} 檢驗，初步鑑驗結果：</p>
+          <p>${reactionOptions}</p>
+          <p>鑑驗測試應在涉嫌人前為之。</p>
+          <p class="drug-signer">涉嫌人簽章：${signer}</p>
+        </td></tr>
+      </tbody>
+    </table>
+  </article>`;
 }
 
 function searchSeizureRecord(caseData, evidenceList, options, draft) {
@@ -80,8 +141,8 @@ function searchSeizureRecord(caseData, evidenceList, options, draft) {
     ? `<img src="${options.signature}" alt="受執行人簽名"><span>${escapeHtml(options.signerName || caseData.suspect)}</span>`
     : "（　　　　　　　　　　　　　　）";
   const pageOne = `<article class="document search-record-page">
-    <header class="search-record-title"><h1>附錄一、搜索筆錄範本</h1></header>
-    <div class="search-record-agency"><strong>（${escapeHtml(caseData.agencyName || caseData.unit || "執行機關")}）</strong>
+    <header class="search-record-title"><h1>搜索扣押筆錄</h1></header>
+    <div class="search-record-agency"><strong>${escapeHtml(caseData.agencyName || caseData.unit || "執行機關")}</strong>
       <span>${mark(true)} 搜索筆錄<br>${mark(hasSeizure)} 扣押筆錄</span></div>
     ${draft ? '<div class="watermark">未簽署工作稿</div>' : ""}
     <table class="search-record-table">
@@ -208,7 +269,7 @@ function signatureArea(options) {
 }
 
 export const wrapDocument = content => `<!doctype html><html lang="zh-Hant"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>證跡文件</title>
-<style>@page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;color:#111;margin:0;background:#fff}.document{width:100%;min-height:273mm;padding:6mm;background:#fff;break-after:page}.document:last-child{break-after:auto}h1{text-align:center}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border:1px solid #333;padding:8px;text-align:left}.watermark{color:#b42318;border:3px solid #b42318;padding:8px;text-align:center;font-weight:bold}.photo-grid{display:grid;grid-template-columns:1fr;gap:18px}figure{break-inside:avoid;margin:0;border:1px solid #555;padding:10px}figure img{width:100%;max-height:280px;object-fit:contain}.signature-box img{max-width:260px;max-height:120px}.signature-line{height:100px;border-bottom:1px solid #333}.page-break{break-after:page;height:0}footer{margin-top:20px;font-size:12px}.seizure-inventory{font-family:"DFKai-SB","標楷體","BiauKai",serif}.seizure-inventory header h1{font-size:1.35rem;font-weight:400;letter-spacing:.08em;margin:0 0 10px}.inventory-table{table-layout:fixed}.inventory-table th{font-weight:400;text-align:center;vertical-align:middle}.inventory-table td{height:54px;text-align:center;vertical-align:middle}.inventory-table .inventory-name{text-align:left}.search-record-page{font-family:"DFKai-SB","標楷體","BiauKai",serif;font-size:.92rem;line-height:1.45}.search-record-title h1{font-size:1.35rem;margin:0 0 8px}.search-record-agency{display:grid;grid-template-columns:1fr auto;align-items:center;border:1px solid #333;padding:4px 10px}.search-record-agency strong{font-size:1.2rem;font-weight:400}.search-record-agency span{border-left:1px solid #333;padding-left:10px}.search-record-table{margin:0;table-layout:fixed}.search-record-table th{width:10%;padding:6px;text-align:center;vertical-align:middle;font-weight:400}.search-record-table td{padding:5px 8px;vertical-align:top}.search-record-table p{margin:3px 0}.search-record-table.page-two th{width:9%}.search-record-table.page-two>tbody>tr:first-child>td{height:145px}.search-record-table.page-two .procedure-checks{height:355px}.search-record-table.page-two>tbody>tr:last-child>td{height:185px}.search-record-final{border:1px solid #333;padding:12px 16px;min-height:390px}.search-record-final p{margin:12px 0}.search-record-signer{display:flex;align-items:center;gap:8px;min-height:52px}.search-record-signer img{max-width:180px;max-height:58px;object-fit:contain}.search-record-notes{margin-top:14px;padding-left:28px}.search-record-notes li{margin:7px 0}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style></head><body>${content}</body></html>`;
+<style>@page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;color:#111;margin:0;background:#fff}.document{width:100%;min-height:273mm;padding:6mm;background:#fff;break-after:page}.document:last-child{break-after:auto}h1{text-align:center}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border:1px solid #333;padding:8px;text-align:left}.watermark{color:#b42318;border:3px solid #b42318;padding:8px;text-align:center;font-weight:bold}.photo-grid{display:grid;grid-template-columns:1fr;gap:18px}figure{break-inside:avoid;margin:0;border:1px solid #555;padding:10px}figure img{width:100%;max-height:280px;object-fit:contain}.signature-box img{max-width:260px;max-height:120px}.signature-line{height:100px;border-bottom:1px solid #333}.page-break{break-after:page;height:0}footer{margin-top:20px;font-size:12px}.seizure-inventory{font-family:"DFKai-SB","標楷體","BiauKai",serif}.seizure-inventory header h1{font-size:1.35rem;font-weight:400;letter-spacing:.08em;margin:0 0 10px}.inventory-table{table-layout:fixed}.inventory-table th{font-weight:400;text-align:center;vertical-align:middle}.inventory-table td{height:54px;text-align:center;vertical-align:middle}.inventory-table .inventory-name{text-align:left}.search-record-page{font-family:"DFKai-SB","標楷體","BiauKai",serif;font-size:.92rem;line-height:1.45}.search-record-title h1{font-size:1.35rem;margin:0 0 8px}.search-record-agency{display:grid;grid-template-columns:1fr auto;align-items:center;border:1px solid #333;padding:4px 10px}.search-record-agency strong{font-size:1.2rem;font-weight:400}.search-record-agency span{border-left:1px solid #333;padding-left:10px}.search-record-table{margin:0;table-layout:fixed}.search-record-table th{width:10%;padding:6px;text-align:center;vertical-align:middle;font-weight:400}.search-record-table td{padding:5px 8px;vertical-align:top}.search-record-table p{margin:3px 0}.search-record-table.page-two th{width:9%}.search-record-table.page-two>tbody>tr:first-child>td{height:145px}.search-record-table.page-two .procedure-checks{height:355px}.search-record-table.page-two>tbody>tr:last-child>td{height:185px}.search-record-final{border:1px solid #333;padding:12px 16px;min-height:390px}.search-record-final p{margin:12px 0}.search-record-signer{display:flex;align-items:center;gap:8px;min-height:52px}.search-record-signer img{max-width:180px;max-height:58px;object-fit:contain}.search-record-notes{margin-top:14px;padding-left:28px}.search-record-notes li{margin:7px 0}.drug-preliminary-report{font-family:"DFKai-SB","標楷體","BiauKai",serif;font-size:.95rem}.drug-preliminary-report h1{font-size:1.25rem;line-height:1.5;font-weight:400}.drug-report-table{table-layout:fixed}.drug-report-table th{width:15%;text-align:center;vertical-align:middle;font-weight:400}.drug-report-table td{vertical-align:top}.drug-report-table tr:first-child td{width:35%}.drug-items p{margin:5px 0 12px}.drug-signer{min-height:58px;display:flex;align-items:center;gap:8px}.drug-signer img{max-width:180px;max-height:58px;object-fit:contain}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style></head><body>${content}</body></html>`;
 
 export async function documentHash(content) {
   return sha256(content);
