@@ -1051,7 +1051,8 @@ async function renderDocuments() {
     .sort((a, b) => String(b.signedAt || b.createdAt).localeCompare(String(a.signedAt || a.createdAt)))[0];
   const content = latestSigned ? extractDocumentBody(latestSigned.content) : generateDocument(state.documentType, caseData, evidence, photos);
   const documentStatus = latestSigned ? `已簽署｜第 ${latestSigned.version} 版` : "未簽署工作稿";
-  shell(`<label class="document-picker">文件種類<select id="document-type">${documentTypes.map(type => `<option ${type === state.documentType ? "selected" : ""}>${type}</option>`).join("")}</select></label>
+  shell(`<section class="document-return-actions" aria-label="文件導覽"><button type="button" data-go="案件詳情" data-id="${escapeHtml(caseData.id)}">返回案件</button><button type="button" data-go="首頁">回首頁</button></section>
+    <label class="document-picker">文件種類<select id="document-type">${documentTypes.map(type => `<option ${type === state.documentType ? "selected" : ""}>${type}</option>`).join("")}</select></label>
     <div class="document-status ${latestSigned ? "signed" : ""}">${documentStatus}</div>
     ${readinessIssues.length ? `<section class="document-readiness panel danger"><div><span class="badge danger">尚缺 ${readinessIssues.length} 項</span><div><h2>正式文件產製前請先補齊</h2><p>${escapeHtml(readinessIssues.slice(0, 4).map(item => item.label).join("、"))}${readinessIssues.length > 4 ? "…" : ""}</p></div></div><button id="fix-document-issue">前往第一個缺漏</button></section>` : '<section class="document-readiness panel complete"><span class="badge done">總檢查完成</span><strong>案件、證物、照片、時間及簽署前資料已齊全。</strong></section>'}
     <section class="document-actions"><button id="regenerate" ${readinessIssues.length ? "disabled" : ""}>建立正式版本</button><button id="editable-export">匯出可修改工作稿</button><button id="print-document" ${readinessIssues.length ? "disabled" : ""}>列印正式文件</button><button id="pdf-export" ${readinessIssues.length ? "disabled" : ""}>匯出正式 PDF</button><button class="primary" data-go="簽署" ${readinessIssues.length ? "disabled" : ""}>進入簽署流程</button></section>
@@ -1105,9 +1106,21 @@ function restoreButton(button) {
 function openPrintDocument(content, pdfMode) {
   const printWindow = window.open("", "_blank");
   if (!printWindow) return toast("瀏覽器阻擋了列印視窗，請允許彈出式視窗後重試。", "錯誤");
-  printWindow.document.write(wrapDocument(preparePrintDocument(content)));
+  const controls = `<nav class="print-navigation" aria-label="列印預覽導覽"><button type="button" id="print-close">關閉</button><button type="button" id="print-back">回上一頁</button><button type="button" id="print-home">回首頁</button></nav>`;
+  printWindow.document.write(wrapDocument(`${controls}${preparePrintDocument(content)}`));
   printWindow.document.close();
   printWindow.onload = () => {
+    const returnToApp = home => {
+      if (printWindow.opener && !printWindow.opener.closed) {
+        if (home) printWindow.opener.location.href = new URL("#首頁", window.location.href).href;
+        printWindow.opener.focus();
+        printWindow.close();
+      } else if (home) printWindow.location.href = new URL("#首頁", window.location.href).href;
+      else printWindow.history.back();
+    };
+    printWindow.document.querySelector("#print-close")?.addEventListener("click", () => returnToApp(false));
+    printWindow.document.querySelector("#print-back")?.addEventListener("click", () => returnToApp(false));
+    printWindow.document.querySelector("#print-home")?.addEventListener("click", () => returnToApp(true));
     if (pdfMode) toast("已開啟列印畫面：電腦請選擇「另存為 PDF」；iPhone 可由預覽的分享按鈕儲存 PDF。");
     printWindow.focus();
     printWindow.print();

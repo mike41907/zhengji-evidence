@@ -42,6 +42,7 @@ test("列印文件使用 A4 PDF 版面與正式文件樣式", () => {
   assert.match(html, /break-after:page/);
   assert.match(html, /Kaiti TC/);
   assert.match(html, /第1頁，共1頁/);
+  assert.match(html, /\.print-navigation\{display:none!important\}/);
 });
 
 test("搜索扣押筆錄簽名帶入受執行人欄位", () => {

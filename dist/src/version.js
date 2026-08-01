@@ -1,6 +1,15 @@
-export const APP_VERSION = "1.17.3";
+export const APP_VERSION = "1.17.4";
 
 export const CHANGELOG = [
+  {
+    version: "1.17.4",
+    date: "2026-08-01",
+    changes: [
+      "文件中心新增返回案件及回首頁按鈕。",
+      "列印與PDF預覽新增關閉、回上一頁及回首頁按鈕。",
+      "預覽導覽按鈕於正式列印時自動隱藏，不會出現在PDF內容。"
+    ]
+  },
   {
     version: "1.17.3",
     date: "2026-08-01",
