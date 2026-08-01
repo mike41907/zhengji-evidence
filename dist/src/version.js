@@ -1,6 +1,16 @@
-export const APP_VERSION = "1.17.2";
+export const APP_VERSION = "1.17.3";
 
 export const CHANGELOG = [
+  {
+    version: "1.17.3",
+    date: "2026-08-01",
+    changes: [
+      "正式列印與PDF改用iPhone楷體及Windows標楷體字型優先順序。",
+      "套印簽名固定為38×16毫米，避免簽名放大撐開表格及增加頁數。",
+      "移除Safari自動列印網址與日期的頁邊空間，改由系統控制A4內距。",
+      "正式文件加入第X頁，共Y頁中文頁碼。"
+    ]
+  },
   {
     version: "1.17.2",
     date: "2026-08-01",

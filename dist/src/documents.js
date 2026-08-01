@@ -111,7 +111,7 @@ function drugPreliminaryReport(caseData, drugEvidence, options, draft) {
     ["愷他命", /愷他命|K他命|Ketamine/i]
   ].map(([label, pattern]) => `${mark(pattern.test(resultText))}呈${label}反應。`).join("　");
   const signer = options.signature
-    ? `<img src="${options.signature}" alt="涉嫌人簽章"><span>${escapeHtml(options.signerName || caseData.suspect)}</span>`
+    ? `<img src="${options.signature}" alt="涉嫌人簽章" style="width:38mm;height:16mm;max-width:38mm;max-height:16mm;object-fit:contain"><span>${escapeHtml(options.signerName || caseData.suspect)}</span>`
     : "____________________________";
   return `<article class="document drug-preliminary-report">
     ${draft ? '<div class="watermark">未簽署工作稿</div>' : ""}
@@ -137,7 +137,7 @@ function drugPreliminaryReport(caseData, drugEvidence, options, draft) {
 function searchSeizureRecord(caseData, evidenceList, options, draft) {
   const hasSeizure = evidenceList.length > 0;
   const signer = options.signature
-    ? `<img src="${options.signature}" alt="受執行人簽名"><span>${escapeHtml(options.signerName || caseData.suspect)}</span>`
+    ? `<img src="${options.signature}" alt="受執行人簽名" style="width:38mm;height:16mm;max-width:38mm;max-height:16mm;object-fit:contain"><span>${escapeHtml(options.signerName || caseData.suspect)}</span>`
     : "（　　　　　　　　　　　　　　）";
   const pageOne = `<article class="document search-record-page">
     <div class="search-record-agency"><strong style="white-space:nowrap">${escapeHtml(caseData.agencyName || caseData.unit || "執行機關")}</strong>
@@ -271,4 +271,23 @@ export const wrapDocument = content => `<!doctype html><html lang="zh-Hant"><hea
 
 export async function documentHash(content) {
   return sha256(content);
+}
+
+export function preparePrintDocument(content) {
+  const totalPages = (content.match(/<article class="document(?:\s|\")/g) || []).length || 1;
+  let currentPage = 0;
+  const numbered = content.replace(/<\/article>/g, () => {
+    currentPage += 1;
+    return `<div class="document-page-number">第${currentPage}頁，共${totalPages}頁</div></article>`;
+  });
+  return `<style id="formal-print-overrides">
+    @page{size:A4 portrait;margin:0}
+    html,body{margin:0!important;padding:0!important;background:#fff!important}
+    .document,.document *{font-family:"Kaiti TC","BiauKai","DFKai-SB","標楷體","KaiTi",serif!important}
+    .document{position:relative;width:210mm!important;min-height:297mm!important;padding:12mm 16mm 17mm!important;margin:0!important;box-shadow:none!important;overflow:hidden}
+    .document h1,.search-record-agency strong{white-space:nowrap!important}
+    .document img[alt="受執行人簽名"],.document img[alt="涉嫌人簽章"],.document img[alt="簽名"]{display:inline-block!important;width:38mm!important;height:16mm!important;max-width:38mm!important;max-height:16mm!important;object-fit:contain!important;vertical-align:middle!important}
+    .document-page-number{position:absolute;right:16mm;bottom:7mm;font-size:10pt;line-height:1;white-space:nowrap}
+    @media print{html,body{width:210mm}.document{break-after:page;page-break-after:always}.document:last-of-type{break-after:auto;page-break-after:auto}}
+  </style>${numbered}`;
 }

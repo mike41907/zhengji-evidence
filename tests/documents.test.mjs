@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateDocument, photoCaption, wrapDocument } from "../src/documents.js";
+import { generateDocument, photoCaption, preparePrintDocument, wrapDocument } from "../src/documents.js";
 
 test("扣押物品目錄表符合正式欄位與最少十一列", () => {
   const html = generateDocument("扣押物品目錄表", {
@@ -35,11 +35,13 @@ test("搜索扣押筆錄產生三頁正式範本", () => {
 });
 
 test("列印文件使用 A4 PDF 版面與正式文件樣式", () => {
-  const html = wrapDocument('<article class="document search-record-page">內容</article>');
-  assert.match(html, /@page\{size:A4 portrait;margin:12mm\}/);
+  const html = wrapDocument(preparePrintDocument('<article class="document search-record-page">內容</article>'));
+  assert.match(html, /@page\{size:A4 portrait;margin:0\}/);
   assert.match(html, /\.search-record-page/);
   assert.match(html, /\.seizure-inventory/);
   assert.match(html, /break-after:page/);
+  assert.match(html, /Kaiti TC/);
+  assert.match(html, /第1頁，共1頁/);
 });
 
 test("搜索扣押筆錄簽名帶入受執行人欄位", () => {
@@ -49,6 +51,16 @@ test("搜索扣押筆錄簽名帶入受執行人欄位", () => {
   }, [], [], { signed: true, signature, signerName: "王小明" });
   assert.match(html, /class="search-record-signer"/);
   assert.equal((html.match(/data:image\/png;base64,TEST_SIGNATURE/g) || []).length, 3);
+  assert.match(html, /width:38mm;height:16mm/);
+});
+
+test("搜索扣押筆錄列印固定為三頁並加入中文頁碼", () => {
+  const content = generateDocument("搜索扣押筆錄", { agencyName: "內政部警政署航空警察局臺北分局" }, [], []);
+  const html = preparePrintDocument(content);
+  assert.match(html, /第1頁，共3頁/);
+  assert.match(html, /第2頁，共3頁/);
+  assert.match(html, /第3頁，共3頁/);
+  assert.equal((html.match(/document-page-number/g) || []).length, 4);
 });
 
 test("毒品文件與照片說明只使用含包裝毛重", () => {

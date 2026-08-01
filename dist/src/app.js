@@ -1,6 +1,6 @@
 import { byCase, clearAllCaseData, deleteCaseData, deleteEvidenceData, get, getAll, importDatabase, openDatabase, permanentlyDeleteTrash, purgeExpiredTrash, put, remove, restoreCaseData, seedDefaults } from "./db.js";
 import { adjacentEvidenceStep, chineseNumber, cloneEvidenceSettings, dateInputValue, downloadBlob, escapeHtml, evidenceLocationDefaults, inputToIso, localInputValue, nowIso, rocDate, rocDateTime, sha256, toast, uuid } from "./utils.js";
-import { documentHash, generateDocument, photoCaption, wrapDocument } from "./documents.js";
+import { documentHash, generateDocument, photoCaption, preparePrintDocument, wrapDocument } from "./documents.js";
 import { collectCase, exportAllBackup, exportCase } from "./exporter.js";
 import { DEFAULT_SUMMARY_TEMPLATE, renderSummary, SUMMARY_FIELDS, summaryValues, unknownSummaryFields } from "./summary.js";
 import { ADDRESS_DATA, CITIES, composeAddress } from "./address.js";
@@ -1078,7 +1078,7 @@ async function renderDocuments() {
       restoreButton(button);
     }
   };
-  document.querySelector("#editable-export").onclick = () => downloadBlob(new Blob([wrapDocument(content)], { type: "application/msword" }), `${state.documentType}_${latestSigned ? `已簽署第${latestSigned.version}版` : "未簽署工作稿"}.doc`);
+  document.querySelector("#editable-export").onclick = () => downloadBlob(new Blob([wrapDocument(preparePrintDocument(content))], { type: "application/msword" }), `${state.documentType}_${latestSigned ? `已簽署第${latestSigned.version}版` : "未簽署工作稿"}.doc`);
   document.querySelector("#print-document").onclick = () => openPrintDocument(content, false);
   document.querySelector("#pdf-export").onclick = () => openPrintDocument(content, true);
   document.querySelector("[data-go='簽署']").onclick = () => navigate("簽署");
@@ -1105,7 +1105,7 @@ function restoreButton(button) {
 function openPrintDocument(content, pdfMode) {
   const printWindow = window.open("", "_blank");
   if (!printWindow) return toast("瀏覽器阻擋了列印視窗，請允許彈出式視窗後重試。", "錯誤");
-  printWindow.document.write(wrapDocument(content));
+  printWindow.document.write(wrapDocument(preparePrintDocument(content)));
   printWindow.document.close();
   printWindow.onload = () => {
     if (pdfMode) toast("已開啟列印畫面：電腦請選擇「另存為 PDF」；iPhone 可由預覽的分享按鈕儲存 PDF。");
