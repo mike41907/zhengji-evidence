@@ -134,7 +134,60 @@ function drugPreliminaryReport(caseData, drugEvidence, options, draft) {
   </article>`;
 }
 
+const templateAsset = file => typeof location === "undefined"
+  ? `./assets/templates/search-record/${file}`
+  : new URL(`./assets/templates/search-record/${file}`, location.href).href;
+
+const templateOverlay = (content, x, y, width, extra = "") =>
+  `<div class="search-template-overlay" style="left:${x}%;top:${y}%;width:${width}%;${extra}">${content}</div>`;
+
 function searchSeizureRecord(caseData, evidenceList, options, draft) {
+  const shortDateTime = value => escapeHtml(rocDateTime(value).replace(/\d{2}秒$/, ""));
+  const warrantText = String(caseData.warrantNumber || "");
+  const warrantYear = warrantText.match(/(\d+)\s*年度/)?.[1] || "";
+  const warrantSerial = warrantText.match(/字第\s*([^號]+)\s*號/)?.[1] || "";
+  const signature = options.signature
+    ? `<img src="${options.signature}" alt="受執行人簽名" style="width:38mm;height:16mm;max-width:38mm;max-height:16mm;object-fit:contain">`
+    : "";
+  const accessibleText = `<div class="template-accessible-text" hidden>
+    ${escapeHtml(caseData.agencyName || caseData.unit || "執行機關")}
+    搜索筆錄 扣押筆錄 執行時間 執行處所 受執行人 身分 ${escapeHtml(caseData.suspectRole || "")} 姓名 性別 出生年月日 身分證統一編號 住居所 是否在場
+    執行之依據 出示搜索票實施之 刑事訴訟法第一百三十七條執行附帶扣押
+    執行時告知事項 執行理由：涉嫌 ${escapeHtml(caseData.caseReason || "毒品危害防制條例")} 案
+    執行經過情形 有開啟鎖扃、封緘或為其他必要之處分 結果 受執行人簽名捺印
+    <span class="search-record-signer">受執行人簽名欄</span>
+  </div>`;
+  const pageOneOverlays = [
+    templateOverlay(`自　${shortDateTime(caseData.searchStart)}　起<br>至　${shortDateTime(caseData.searchEnd)}　止`, 17.8, 10.2, 71, "font-size:10.5pt;line-height:1.55"),
+    templateOverlay(escapeHtml(caseData.address || ""), 17.8, 15.2, 72, "font-size:11pt"),
+    templateOverlay(escapeHtml(caseData.suspect || ""), 27.2, 22.3, 61, "font-size:11pt"),
+    templateOverlay(escapeHtml(caseData.suspectGender || ""), 27.2, 25.6, 61, "font-size:11pt"),
+    templateOverlay(escapeHtml(caseData.suspectBirthDate ? rocDate(caseData.suspectBirthDate) : ""), 27.2, 29.5, 61, "font-size:11pt"),
+    templateOverlay(escapeHtml(caseData.suspectId || ""), 27.2, 33.5, 61, "font-size:11pt"),
+    templateOverlay(escapeHtml(caseData.suspectResidence || caseData.suspectRegisteredAddress || ""), 27.2, 37.2, 61, "font-size:10.5pt"),
+    templateOverlay(escapeHtml(caseData.suspectPresent || "是"), 27.2, 40.8, 61, "font-size:11pt"),
+    templateOverlay(escapeHtml(warrantYear), 45.7, 46.9, 8, "font-size:10pt;text-align:center"),
+    templateOverlay(escapeHtml(warrantSerial), 68.2, 46.9, 9, "font-size:10pt;text-align:center")
+  ].join("");
+  const pageTwoOverlays = "";
+  const pageThreeOverlays = [
+    signature ? templateOverlay(signature, 40, 7.4, 30, "height:7%;display:flex;align-items:center;justify-content:center") : "",
+    signature ? templateOverlay(signature, 40, 14.9, 30, "height:7%;display:flex;align-items:center;justify-content:center") : "",
+    templateOverlay(`${signature}<span>${escapeHtml(options.signerName || caseData.suspect || "")}</span>`, 25, 27.4, 55, "display:flex;align-items:center;gap:6px;font-size:11pt"),
+    templateOverlay(escapeHtml(caseData.presentPeople || ""), 25, 31.8, 55, "font-size:11pt"),
+    templateOverlay(escapeHtml(caseData.suspectResidence || caseData.address || ""), 25, 36.0, 60, "font-size:10.5pt"),
+    templateOverlay(escapeHtml(caseData.executors || "航警臺北分局（偵查隊）"), 25, 40.3, 60, "font-size:10.5pt"),
+    templateOverlay(escapeHtml(caseData.recorder || ""), 25, 54.8, 55, "font-size:11pt"),
+    templateOverlay(escapeHtml(rocDate(caseData.searchEnd || caseData.searchStart)), 36, 64.0, 51, "font-size:11pt;letter-spacing:.35em")
+  ].join("");
+  const page = (number, overlays) => `<article class="document search-record-page search-record-template-page">
+    ${number === 1 ? accessibleText : ""}<img class="search-record-template-image" src="${templateAsset(`page-${String(number).padStart(2, "0")}.webp`)}" alt="搜索扣押筆錄第${number}頁空白範本">${overlays}
+    ${draft ? '<div class="watermark template-watermark">未簽署工作稿</div>' : ""}
+  </article>`;
+  return `${page(1, pageOneOverlays)}${page(2, pageTwoOverlays)}${page(3, pageThreeOverlays)}`;
+}
+
+function legacySearchSeizureRecord(caseData, evidenceList, options, draft) {
   const hasSeizure = evidenceList.length > 0;
   const signer = options.signature
     ? `<img src="${options.signature}" alt="受執行人簽名" style="width:38mm;height:16mm;max-width:38mm;max-height:16mm;object-fit:contain"><span>${escapeHtml(options.signerName || caseData.suspect)}</span>`
@@ -287,6 +340,10 @@ export function preparePrintDocument(content) {
     .document{position:relative;width:210mm!important;min-height:297mm!important;padding:12mm 16mm 17mm!important;margin:0!important;box-shadow:none!important;overflow:hidden}
     .document h1,.search-record-agency strong{white-space:nowrap!important}
     .document img[alt="受執行人簽名"],.document img[alt="涉嫌人簽章"],.document img[alt="簽名"]{display:inline-block!important;width:38mm!important;height:16mm!important;max-width:38mm!important;max-height:16mm!important;object-fit:contain!important;vertical-align:middle!important}
+    .search-record-template-page{position:relative!important;width:210mm!important;height:297mm!important;min-height:297mm!important;padding:0!important;overflow:hidden!important;background:#fff!important}
+    .search-record-template-image{position:absolute!important;z-index:0;inset:0;width:210mm!important;height:297mm!important;max-width:none!important;max-height:none!important;object-fit:fill!important}
+    .search-template-overlay{position:absolute;z-index:2;white-space:nowrap;overflow:hidden;color:#000;font-weight:400}
+    .template-watermark{position:absolute;z-index:3;left:35%;top:4%;width:30%;background:#fff9}
     .document-page-number{position:absolute;right:16mm;bottom:7mm;font-size:10pt;line-height:1;white-space:nowrap}
     .print-navigation{position:sticky;z-index:20;top:0;display:flex;gap:8px;padding:10px;background:#f5f8fa;border-bottom:1px solid #cbd8df;font-family:-apple-system,"Microsoft JhengHei",sans-serif!important}.print-navigation button{min-height:44px;padding:8px 14px;border:1px solid #9fb1bc;border-radius:9px;background:#fff;color:#123047;font:700 16px -apple-system,"Microsoft JhengHei",sans-serif}
     @media print{html,body{width:210mm}.print-navigation{display:none!important}.document{break-after:page;page-break-after:always}.document:last-of-type{break-after:auto;page-break-after:auto}}
