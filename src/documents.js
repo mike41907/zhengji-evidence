@@ -288,6 +288,7 @@ export function preparePrintDocument(content) {
     .document h1,.search-record-agency strong{white-space:nowrap!important}
     .document img[alt="受執行人簽名"],.document img[alt="涉嫌人簽章"],.document img[alt="簽名"]{display:inline-block!important;width:38mm!important;height:16mm!important;max-width:38mm!important;max-height:16mm!important;object-fit:contain!important;vertical-align:middle!important}
     .document-page-number{position:absolute;right:16mm;bottom:7mm;font-size:10pt;line-height:1;white-space:nowrap}
-    @media print{html,body{width:210mm}.document{break-after:page;page-break-after:always}.document:last-of-type{break-after:auto;page-break-after:auto}}
+    .print-navigation{position:sticky;z-index:20;top:0;display:flex;gap:8px;padding:10px;background:#f5f8fa;border-bottom:1px solid #cbd8df;font-family:-apple-system,"Microsoft JhengHei",sans-serif!important}.print-navigation button{min-height:44px;padding:8px 14px;border:1px solid #9fb1bc;border-radius:9px;background:#fff;color:#123047;font:700 16px -apple-system,"Microsoft JhengHei",sans-serif}
+    @media print{html,body{width:210mm}.print-navigation{display:none!important}.document{break-after:page;page-break-after:always}.document:last-of-type{break-after:auto;page-break-after:auto}}
   </style>${numbered}`;
 }
