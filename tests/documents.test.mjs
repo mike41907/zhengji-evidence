@@ -30,8 +30,12 @@ test("搜索扣押筆錄產生三頁正式範本", () => {
   assert.match(html, /執行時告知事項/);
   assert.match(html, /執行經過情形/);
   assert.match(html, /受執行人簽名捺印/);
-  assert.match(html, /出生年月日　80年01月02日/);
-  assert.equal((html.match(/search-record-page/g) || []).length, 3);
+  assert.match(html, /80年01月02日/);
+  assert.equal((html.match(/search-record-template-page/g) || []).length, 3);
+  assert.equal((html.match(/search-record-template-image/g) || []).length, 3);
+  assert.match(html, /page-01\.webp/);
+  assert.match(html, /page-02\.webp/);
+  assert.match(html, /page-03\.webp/);
 });
 
 test("列印文件使用 A4 PDF 版面與正式文件樣式", () => {
@@ -123,7 +127,8 @@ test("搜索扣押筆錄採用原始機關標題及完整告知內容", () => {
   assert.match(html, /內政部警政署航空警察局臺北分局/);
   assert.match(html, /執行理由：涉嫌 毒品危害防制條例 案/);
   assert.doesNotMatch(html, /☑/);
-  assert.match(html, /☐犯罪嫌疑人/);
+  assert.match(html, /犯罪嫌疑人/);
+  assert.match(html, /page-02\.webp/);
   assert.match(html, /有開啟鎖扃、封緘或為其他必要之處分/);
   assert.match(html, /刑事訴訟法第一百三十七條執行附帶扣押/);
   assert.doesNotMatch(html, /附錄一、搜索筆錄範本/);
