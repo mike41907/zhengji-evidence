@@ -24,7 +24,8 @@ test("搜索扣押筆錄產生三頁正式範本", () => {
     address: "彰化縣彰化市測試路1號", searchStart: "2026-07-30T01:00:00Z",
     searchEnd: "2026-07-30T02:00:00Z", executors: "陳員警", recorder: "林員警"
   }, [{ evidenceCategory: "手機", name: "手機", quantity: "1", quantityUnit: "支" }], []);
-  assert.match(html, /搜索扣押筆錄/);
+  assert.match(html, /搜索筆錄/);
+  assert.match(html, /扣押筆錄/);
   assert.match(html, /執行之依據/);
   assert.match(html, /執行時告知事項/);
   assert.match(html, /執行經過情形/);
@@ -99,12 +100,17 @@ test("正確的毒品初步鑑驗報告單會整合多筆毒品證物", () => {
   assert.match(html, /涉嫌人簽章/);
 });
 
-test("搜索扣押筆錄採用正式名稱及完整扣押法源選項", () => {
+test("搜索扣押筆錄採用原始機關標題及完整告知內容", () => {
   const html = generateDocument("搜索扣押筆錄", {
     agencyName: "內政部警政署航空警察局臺北分局",
+    suspectRole: "犯罪嫌疑人",
     searchLegalBasis: "附帶扣押"
   }, [], []);
-  assert.match(html, /<h1>搜索扣押筆錄<\/h1>/);
+  assert.doesNotMatch(html, /<h1>搜索扣押筆錄<\/h1>/);
+  assert.match(html, /內政部警政署航空警察局臺北分局/);
+  assert.match(html, /執行理由：涉嫌 毒品危害防制條例 案/);
+  assert.match(html, /☑犯罪嫌疑人/);
+  assert.match(html, /有開啟鎖扃、封緘或為其他必要之處分/);
   assert.match(html, /刑事訴訟法第一百三十七條執行附帶扣押/);
   assert.doesNotMatch(html, /附錄一、搜索筆錄範本/);
 });

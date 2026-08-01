@@ -140,8 +140,10 @@ function searchSeizureRecord(caseData, evidenceList, options, draft) {
   const signer = options.signature
     ? `<img src="${options.signature}" alt="受執行人簽名"><span>${escapeHtml(options.signerName || caseData.suspect)}</span>`
     : "（　　　　　　　　　　　　　　）";
+  const suspectRole = caseData.suspectRole || "受搜索人";
+  const executionTargetRole = caseData.executionTargetRole || (["被告", "犯罪嫌疑人", "第三人"].includes(suspectRole) ? suspectRole : "犯罪嫌疑人");
+  const targetRole = role => mark(executionTargetRole === role);
   const pageOne = `<article class="document search-record-page">
-    <header class="search-record-title"><h1>搜索扣押筆錄</h1></header>
     <div class="search-record-agency"><strong>${escapeHtml(caseData.agencyName || caseData.unit || "執行機關")}</strong>
       <span>${mark(true)} 搜索筆錄<br>${mark(hasSeizure)} 扣押筆錄</span></div>
     ${draft ? '<div class="watermark">未簽署工作稿</div>' : ""}
@@ -149,7 +151,7 @@ function searchSeizureRecord(caseData, evidenceList, options, draft) {
       <tbody>
         <tr><th>執行時間</th><td>自 ${line(rocDateTime(caseData.searchStart))} 起<br>至 ${line(rocDateTime(caseData.searchEnd))} 止</td></tr>
         <tr><th>執行處所</th><td>${line(caseData.address)}</td></tr>
-        <tr><th rowspan="7">受執行人</th><td>身分　${["受搜索人","扣押物所有人","扣押物持有人","扣押物保管人"].map(role => `${mark(caseData.suspectRole === role)}${role}`).join("　")}</td></tr>
+        <tr><th rowspan="7">受執行人</th><td>身分　${["受搜索人","扣押物所有人","扣押物持有人","扣押物保管人"].map(role => `${mark(caseData.suspectRole === role || (role === "受搜索人" && !caseData.suspectRole))}${role}`).join("　")}</td></tr>
         <tr><td>姓名　${line(caseData.suspect)}</td></tr>
         <tr><td>性別　${line(caseData.suspectGender)}</td></tr>
         <tr><td>出生年月日　${line(caseData.suspectBirthDate ? rocDate(caseData.suspectBirthDate) : "")}</td></tr>
@@ -164,25 +166,25 @@ function searchSeizureRecord(caseData, evidenceList, options, draft) {
     <table class="search-record-table page-two">
       <tbody>
         <tr><th>執行時告知事項</th><td>
-          <p>執行理由：為搜索本案證物品。</p>
-          <p>執行對象：${mark(true)}被告　${mark(false)}犯罪嫌疑人　${mark(false)}第三人</p>
-          <p>執行範圍：${mark(true)}處所　${mark(false)}身體　${mark(false)}物件　${mark(false)}電磁紀錄</p>
-          <p>應扣押之物：本案物件</p>
+          <p>執行理由：涉嫌 ${escapeHtml(caseData.caseReason || "毒品危害防制條例")} 案</p>
+          <p>執行對象：${targetRole("被告")}被告　${targetRole("犯罪嫌疑人")}犯罪嫌疑人　${targetRole("第三人")}第三人</p>
+          <p>執行範圍：${mark(true)}處所（同上）　${mark(caseData.searchBody !== false)}身體（同上受執行人）<br>${mark(Boolean(caseData.searchObject))}物件：${escapeHtml(caseData.searchObject || "")}　${mark(Boolean(caseData.searchDigitalRecords))}電磁紀錄</p>
+          <p>應扣押之物：${escapeHtml(caseData.seizureTarget || "詳如扣押物品目錄表")}</p>
         </td></tr>
         <tr><th>執行經過情形</th><td class="procedure-checks">
-          <p>${mark(false)} 執行人員有出示證件表明身分。</p>
-          <p>${mark(false)} 搜索婦女之身體，有命婦女行之；不能由婦女行之者，已記明原因。</p>
-          <p>${mark(false)} 執行搜索時，已保持名譽並避免不必要之干擾。</p>
-          <p>${mark(false)} 有開啟鎖閉封緘或其他必要之處分時，已注意現場安全及比例原則。</p>
-          <p>${mark(false)} 搜索有人住居或看守之處所，已請住居人、看守人或其他適當之人在場。</p>
-          <p>${mark(false)} 對於政府機關、公務員或軍人持有或保管之文書及物件，依法辦理。</p>
+          <p>${mark(true)} 執行人員有出示證件表明身分。</p>
+          <p>${mark(false)} 搜索婦女之身體，有命婦女行之。但不能由婦女行之者，原因：____________________</p>
+          <p>${mark(false)} 軍事上應秘密之處所，有得該管長官之允許。</p>
+          <p>${mark(false)} 對抗拒搜索者，有使用強制力搜索之，未逾必要之程度。</p>
+          <p>${mark(false)} 有開啟鎖扃、封緘或為其他必要之處分。有封鎖現場、禁止在場人員離去，或禁止第三人進入現場。對於違反禁止命令者，有命其離開或交由適當之人看管至執行終了。</p>
+          <p>${mark(false)} 有人住居或看守之住宅或其他處所，於夜間入內搜索或扣押，有經住居人、看守人或可為代表之人承諾或有急迫之情形者。</p>
+          <p>${mark(false)} 搜索右開住宅、處所或船艦，有命住居人或看守人或可為其代表人在場，其不能在場者，有命該住宅、處所或船艦內之人或其鄰居之人或就近自治團體之職員在場，並將搜索票出示在場之人。</p>
+          <p>${mark(false)} 對於政府機關公務員或曾為公務員之人所持有或保管之文書及其他物件，為其職務上應守密者，有經該管監督機關或公務員之允許。</p>
           <p>${mark(false)} 其他：________________________________________________</p>
         </td></tr>
         <tr><th>結果</th><td>
-          <p>經搜索未發現應行扣押物，並付與無應扣押之物證明書。</p>
-          <p>受搜索人簽名捺印：${signer}</p>
-          <p>${mark(hasSeizure)} 發現應行扣押物，已扣押並付與扣押物收據、搜索扣押物品目錄表。</p>
-          <p>受執行人簽名捺印：${signer}</p>
+          <p>${mark(!hasSeizure)} 經搜索未發現應行扣押物，並付與無應扣押之物證明書。<br>（受搜索人簽名捺印：${signer}）</p>
+          <p>${mark(hasSeizure)} 發現應行扣押物，已扣押並付與扣押物收據，經扣押之物詳如扣押物品目錄表（如附件）。<br>（受執行人簽名捺印：${signer}）</p>
           <p>${mark(false)} 其他：________________________________________________</p>
         </td></tr>
       </tbody>
@@ -190,18 +192,18 @@ function searchSeizureRecord(caseData, evidenceList, options, draft) {
   </article>`;
   const pageThree = `<article class="document search-record-page">
     <div class="search-record-final">
-      <p>上開筆錄經受搜索人或受扣押人及在場人親自閱覽或告以要旨確認無誤後，始命其簽名捺印：</p>
+      <p>上開筆錄經受搜索人或受扣押人及在場人親自閱覽或告以要旨確認無訛後，始命其簽捺如後：</p>
       <p class="search-record-signer">受執行人：${options.signature ? signer : line(caseData.suspect)}</p>
       <p>在場人：${line(caseData.presentPeople)}</p>
       <p>住所：${line(caseData.suspectResidence || caseData.address)}</p>
-      <p>執行人：${line(caseData.executors)}</p>
+      <p>執行人：${line(caseData.executors || "航警臺北分局（偵查隊）")}</p>
       <p>紀錄人：${line(caseData.recorder)}</p>
       <p>中華民國　${line(rocDateTime(caseData.searchEnd || caseData.searchStart))}</p>
     </div>
     <ol class="search-record-notes">
       <li>本筆錄可供執行搜索扣押或未經搜索之單純扣押之用，請依實際執行情形填寫。</li>
       <li>經受搜索人出於自願性同意搜索者，應請受搜索人簽名捺印。</li>
-      <li>執行結果發現無應扣押之物證明書或扣押物證據，應請受執行人簽名捺印。</li>
+      <li>執行結果發給無應扣押之物證明書或扣押物收據，應請受執行人簽名捺印。</li>
     </ol>
   </article>`;
   return `${pageOne}<div class="page-break"></div>${pageTwo}<div class="page-break"></div>${pageThree}`;
