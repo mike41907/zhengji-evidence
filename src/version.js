@@ -1,6 +1,15 @@
-export const APP_VERSION = "1.17.1";
+export const APP_VERSION = "1.17.2";
 
 export const CHANGELOG = [
+  {
+    version: "1.17.2",
+    date: "2026-08-01",
+    changes: [
+      "搜索扣押筆錄所有選項一律保留空白方框，不再由系統預先勾選。",
+      "所有正式文件統一使用標楷體字型。",
+      "文件標題強制維持單行，長標題自動採較小字級避免換行。"
+    ]
+  },
   {
     version: "1.17.1",
     date: "2026-08-01",
