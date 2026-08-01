@@ -14,7 +14,7 @@ export function photoCaption(evidence, type, index = 1) {
 }
 
 function heading(title, caseData, draft) {
-  return `<header><h1>${escapeHtml(title)}</h1>${draft ? '<div class="watermark">未簽署工作稿</div>' : ""}
+  return `<header><h1 style="white-space:nowrap;font-family:'DFKai-SB','標楷體','BiauKai',serif;font-size:1.2rem">${escapeHtml(title)}</h1>${draft ? '<div class="watermark">未簽署工作稿</div>' : ""}
     <p>案件名稱：${escapeHtml(caseData.name || "未填")}</p></header>`;
 }
 
@@ -40,7 +40,7 @@ export function generateDocument(type, caseData, evidenceList, photos, options =
     body = seizureInventory(caseData, evidenceList, draft);
   }
   if (type === "搜索扣押筆錄" || type === "扣押物品目錄表" || type === "扣押物品清冊") return body;
-  return `<article class="document">${body}<footer>文件版本：${escapeHtml(options.version || "第一版")}</footer></article>`;
+  return `<article class="document" style="font-family:'DFKai-SB','標楷體','BiauKai',serif">${body}<footer>文件版本：${escapeHtml(options.version || "第一版")}</footer></article>`;
 }
 
 function evidenceTable(items) {
@@ -55,7 +55,6 @@ const mark = checked => checked ? "☑" : "☐";
 const line = value => escapeHtml(value || "　　　　　　　　　");
 
 function legalBasisOptions(caseData) {
-  const selected = caseData.searchLegalBasis || "";
   return [
     ["出示搜索票", `出示搜索票實施之。${caseData.warrantNumber ? `（${escapeHtml(caseData.warrantNumber)}）` : "（搜索票字號留存於卷內）"}`],
     ["附帶搜索", "依刑事訴訟法第一百三十條執行附帶搜索。"],
@@ -73,7 +72,7 @@ function legalBasisOptions(caseData) {
     ["任意提出物扣押", "依刑事訴訟法第一百四十三條後段就所有人或保管人任意提出或交付之物予以扣押。"],
     ["另案扣押", "係另案應扣押之物，依刑事訴訟法第一百五十二條執行另案扣押。"],
     ["其他", "其他依法得執行搜索或扣押之事由。"]
-  ].map(([value, label]) => `<p>${mark(selected === value)} ${label}</p>`).join("");
+  ].map(([, label]) => `<p>${mark(false)} ${label}</p>`).join("");
 }
 
 const chineseSequence = index => ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"][index] || String(index + 1);
@@ -116,7 +115,7 @@ function drugPreliminaryReport(caseData, drugEvidence, options, draft) {
     : "____________________________";
   return `<article class="document drug-preliminary-report">
     ${draft ? '<div class="watermark">未簽署工作稿</div>' : ""}
-    <header><h1>${escapeHtml(agency.replace(/^內政部警政署/, ""))}查獲涉嫌毒品危害防制條例<br>毒品初步鑑驗報告單</h1></header>
+    <header><h1 style="white-space:nowrap;font-size:.95rem;letter-spacing:0">${escapeHtml(agency.replace(/^內政部警政署/, ""))}查獲涉嫌毒品危害防制條例毒品初步鑑驗報告單</h1></header>
     <table class="drug-report-table">
       <tbody>
         <tr><th>案類</th><td>${drugCaseType(drugEvidence)}</td><th>涉嫌人</th><td>${escapeHtml(caseData.suspect || "")}</td></tr>
@@ -140,18 +139,15 @@ function searchSeizureRecord(caseData, evidenceList, options, draft) {
   const signer = options.signature
     ? `<img src="${options.signature}" alt="受執行人簽名"><span>${escapeHtml(options.signerName || caseData.suspect)}</span>`
     : "（　　　　　　　　　　　　　　）";
-  const suspectRole = caseData.suspectRole || "受搜索人";
-  const executionTargetRole = caseData.executionTargetRole || (["被告", "犯罪嫌疑人", "第三人"].includes(suspectRole) ? suspectRole : "犯罪嫌疑人");
-  const targetRole = role => mark(executionTargetRole === role);
   const pageOne = `<article class="document search-record-page">
-    <div class="search-record-agency"><strong>${escapeHtml(caseData.agencyName || caseData.unit || "執行機關")}</strong>
-      <span>${mark(true)} 搜索筆錄<br>${mark(hasSeizure)} 扣押筆錄</span></div>
+    <div class="search-record-agency"><strong style="white-space:nowrap">${escapeHtml(caseData.agencyName || caseData.unit || "執行機關")}</strong>
+      <span>${mark(false)} 搜索筆錄<br>${mark(false)} 扣押筆錄</span></div>
     ${draft ? '<div class="watermark">未簽署工作稿</div>' : ""}
     <table class="search-record-table">
       <tbody>
         <tr><th>執行時間</th><td>自 ${line(rocDateTime(caseData.searchStart))} 起<br>至 ${line(rocDateTime(caseData.searchEnd))} 止</td></tr>
         <tr><th>執行處所</th><td>${line(caseData.address)}</td></tr>
-        <tr><th rowspan="7">受執行人</th><td>身分　${["受搜索人","扣押物所有人","扣押物持有人","扣押物保管人"].map(role => `${mark(caseData.suspectRole === role || (role === "受搜索人" && !caseData.suspectRole))}${role}`).join("　")}</td></tr>
+        <tr><th rowspan="7">受執行人</th><td>身分　${["受搜索人","扣押物所有人","扣押物持有人","扣押物保管人"].map(role => `${mark(false)}${role}`).join("　")}</td></tr>
         <tr><td>姓名　${line(caseData.suspect)}</td></tr>
         <tr><td>性別　${line(caseData.suspectGender)}</td></tr>
         <tr><td>出生年月日　${line(caseData.suspectBirthDate ? rocDate(caseData.suspectBirthDate) : "")}</td></tr>
@@ -167,12 +163,12 @@ function searchSeizureRecord(caseData, evidenceList, options, draft) {
       <tbody>
         <tr><th>執行時告知事項</th><td>
           <p>執行理由：涉嫌 ${escapeHtml(caseData.caseReason || "毒品危害防制條例")} 案</p>
-          <p>執行對象：${targetRole("被告")}被告　${targetRole("犯罪嫌疑人")}犯罪嫌疑人　${targetRole("第三人")}第三人</p>
-          <p>執行範圍：${mark(true)}處所（同上）　${mark(caseData.searchBody !== false)}身體（同上受執行人）<br>${mark(Boolean(caseData.searchObject))}物件：${escapeHtml(caseData.searchObject || "")}　${mark(Boolean(caseData.searchDigitalRecords))}電磁紀錄</p>
+          <p>執行對象：${mark(false)}被告　${mark(false)}犯罪嫌疑人　${mark(false)}第三人</p>
+          <p>執行範圍：${mark(false)}處所（同上）　${mark(false)}身體（同上受執行人）<br>${mark(false)}物件：${escapeHtml(caseData.searchObject || "")}　${mark(false)}電磁紀錄</p>
           <p>應扣押之物：${escapeHtml(caseData.seizureTarget || "詳如扣押物品目錄表")}</p>
         </td></tr>
         <tr><th>執行經過情形</th><td class="procedure-checks">
-          <p>${mark(true)} 執行人員有出示證件表明身分。</p>
+          <p>${mark(false)} 執行人員有出示證件表明身分。</p>
           <p>${mark(false)} 搜索婦女之身體，有命婦女行之。但不能由婦女行之者，原因：____________________</p>
           <p>${mark(false)} 軍事上應秘密之處所，有得該管長官之允許。</p>
           <p>${mark(false)} 對抗拒搜索者，有使用強制力搜索之，未逾必要之程度。</p>
@@ -183,8 +179,8 @@ function searchSeizureRecord(caseData, evidenceList, options, draft) {
           <p>${mark(false)} 其他：________________________________________________</p>
         </td></tr>
         <tr><th>結果</th><td>
-          <p>${mark(!hasSeizure)} 經搜索未發現應行扣押物，並付與無應扣押之物證明書。<br>（受搜索人簽名捺印：${signer}）</p>
-          <p>${mark(hasSeizure)} 發現應行扣押物，已扣押並付與扣押物收據，經扣押之物詳如扣押物品目錄表（如附件）。<br>（受執行人簽名捺印：${signer}）</p>
+          <p>${mark(false)} 經搜索未發現應行扣押物，並付與無應扣押之物證明書。<br>（受搜索人簽名捺印：${signer}）</p>
+          <p>${mark(false)} 發現應行扣押物，已扣押並付與扣押物收據，經扣押之物詳如扣押物品目錄表（如附件）。<br>（受執行人簽名捺印：${signer}）</p>
           <p>${mark(false)} 其他：________________________________________________</p>
         </td></tr>
       </tbody>
@@ -254,7 +250,7 @@ function seizureInventory(caseData, items, draft) {
       <td>${escapeHtml(item.notes || "")}</td></tr>`;
   }).join("");
   return `<article class="document seizure-inventory">
-    <header><h1>${escapeHtml(caseData.agencyName || caseData.unit || "執行機關")}扣押物品目錄表</h1>${draft ? '<div class="watermark">未簽署工作稿</div>' : ""}</header>
+    <header><h1 style="white-space:nowrap;font-size:1.05rem;letter-spacing:0">${escapeHtml(caseData.agencyName || caseData.unit || "執行機關")}扣押物品目錄表</h1>${draft ? '<div class="watermark">未簽署工作稿</div>' : ""}</header>
     <table class="inventory-table">
       <colgroup><col style="width:8%"><col style="width:35%"><col style="width:10%"><col style="width:10%"><col style="width:27%"><col style="width:10%"></colgroup>
       <thead><tr><th>編號</th><th>品名</th><th>單位</th><th>數量</th><th>所有人／持有<br>人／保管人</th><th>備考</th></tr></thead>

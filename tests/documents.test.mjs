@@ -109,8 +109,20 @@ test("搜索扣押筆錄採用原始機關標題及完整告知內容", () => {
   assert.doesNotMatch(html, /<h1>搜索扣押筆錄<\/h1>/);
   assert.match(html, /內政部警政署航空警察局臺北分局/);
   assert.match(html, /執行理由：涉嫌 毒品危害防制條例 案/);
-  assert.match(html, /☑犯罪嫌疑人/);
+  assert.doesNotMatch(html, /☑/);
+  assert.match(html, /☐犯罪嫌疑人/);
   assert.match(html, /有開啟鎖扃、封緘或為其他必要之處分/);
   assert.match(html, /刑事訴訟法第一百三十七條執行附帶扣押/);
   assert.doesNotMatch(html, /附錄一、搜索筆錄範本/);
+});
+
+test("所有正式文件使用標楷體且標題維持單行", () => {
+  const caseData = { agencyName: "內政部警政署航空警察局臺北分局", suspect: "王小明" };
+  const drug = generateDocument("毒品初步鑑驗報告單", caseData, [], []);
+  const inventory = generateDocument("扣押物品目錄表", caseData, [], []);
+  const photos = generateDocument("證物照片紀錄", caseData, [], []);
+  assert.match(wrapDocument(photos), /標楷體/);
+  assert.match(drug, /white-space:nowrap/);
+  assert.doesNotMatch(drug, /條例<br>毒品初步鑑驗報告單/);
+  assert.match(inventory, /<h1 style="white-space:nowrap;/);
 });
